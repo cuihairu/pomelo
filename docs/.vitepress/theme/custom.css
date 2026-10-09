@@ -10,7 +10,6 @@
   --vp-c-brand-2: #d96b5b;              /* mid step                      */
   --vp-c-brand-3: #ed8072;              /* the logo itself               */
   --vp-c-brand-soft: rgba(237, 128, 114, 0.14);
-  --vp-custom-outline: var(--vp-c-brand-3);
 
   /* buttons: solid logo color, pill shaped (radius set below) */
   --vp-button-brand-bg: var(--vp-c-brand-3);
@@ -63,6 +62,21 @@
 }
 .VPFeature:hover {
   border-color: var(--vp-c-brand-3);
+}
+
+/* --- panel outlines ---------------------------------------------------- */
+
+/* The default theme draws its window frames with --vp-c-gutter (the
+ * mobile local nav's bottom rule) and --vp-c-divider (the right-hand
+ * outline's left rule). Tint both with the brand so the second-level
+ * chrome reads as one material instead of three different grays. */
+:root {
+  --vp-c-gutter: rgba(237, 128, 114, 0.22);
+  --vp-c-divider: rgba(237, 128, 114, 0.2);
+}
+.dark {
+  --vp-c-gutter: rgba(237, 128, 114, 0.28);
+  --vp-c-divider: rgba(237, 128, 114, 0.26);
 }
 
 /* --- reading typography ------------------------------------------------ */
