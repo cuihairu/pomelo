@@ -45,6 +45,17 @@ add_custom_command(OUTPUT ${IMG}
     DEPENDS mkfs)
 add_custom_target(image ALL DEPENDS ${IMG})
 
+# bootable iso (grub multiboot); optional, needs grub-mkrescue + xorriso
+find_program(GRUB_MKRESCUE grub-mkrescue)
+if(GRUB_MKRESCUE)
+    set(ISO ${CMAKE_BINARY_DIR}/pomelo.iso)
+    add_custom_command(OUTPUT ${ISO}
+        COMMAND sh ${CMAKE_SOURCE_DIR}/tools/mkiso.sh
+                $<TARGET_FILE:kernel> ${ISO}
+        DEPENDS kernel)
+    add_custom_target(iso DEPENDS ${ISO})
+endif()
+
 # ---------------------------------------------------------------------------
 # run & smoke test: boot in QEMU, drive the shell over the serial port.
 # ---------------------------------------------------------------------------

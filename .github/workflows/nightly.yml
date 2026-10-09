@@ -1,0 +1,96 @@
+# Nightly: build the image, really boot it in QEMU, publish the evidence.
+#
+# The release is rolling: the `nightly` tag is deleted and recreated each
+# run, so there is exactly one nightly release at any time. Everything it
+# ships (iso, kernel, disk image, serial log, boot screenshot) is rebuilt
+# from that day's main; nothing is cached between runs.
+#
+# Machine choice matters for the disk: `pc` has legacy IDE so ls/cat work;
+# `q35` wires its disk through AHCI and the fs service parks with a note
+# (see tools/nightly-run.sh). Both outcomes are green; a hang is not.
+
+name: nightly
+
+on:
+  schedule:
+    - cron: '37 21 * * *'
+  workflow_dispatch:
+    inputs:
+      machine:
+        description: QEMU machine type
+        type: choice
+        default: q35
+        options:
+          - q35
+          - pc
+      qemu_extra:
+        description: extra qemu args, e.g. "-d int" to watch interrupts
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+    env:
+      MACHINE: ${{ inputs.machine || 'q35' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install qemu and iso tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+              qemu-system-x86 grub-pc-bin xorriso mtools socat imagemagick
+
+      - name: build kernel, image and iso
+        run: |
+          cmake -S . -B build
+          cmake --build build -j
+          cmake --build build --target iso
+
+      - name: smoke test
+        working-directory: build
+        run: ctest --output-on-failure
+
+      - name: boot in qemu and collect evidence
+        run: |
+          sh tools/nightly-run.sh qemu-system-x86_64 "$MACHINE" \
+              build/kernel build/pomelo.img nightly-output \
+              ${{ inputs.qemu_extra }}
+
+      - name: upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nightly-${{ env.MACHINE }}
+          path: |
+            nightly-output/serial.log
+            nightly-output/boot.png
+            build/pomelo.iso
+            build/kernel
+            build/pomelo.img
+          retention-days: 14
+
+      - name: refresh the rolling nightly release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          date=$(date -u +%F)
+          short=${GITHUB_SHA:0:7}
+          cat > nightly-notes.md <<EOF
+          booted in qemu (-M $MACHINE) at commit $short.
+
+          try it:
+              qemu-system-x86_64 -M pc -kernel kernel -hda pomelo.img -serial stdio
+
+          q35 note: the disk sits behind ahci, so the fs service parks with
+          a no-disk note; pick machine=pc for the full disk battery.
+          EOF
+          gh release delete nightly --yes --cleanup-tag || true
+          gh release create nightly \
+              --title "nightly $date" \
+              --notes-file nightly-notes.md \
+              build/pomelo.iso build/kernel build/pomelo.img \
+              nightly-output/serial.log nightly-output/boot.png
