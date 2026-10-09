@@ -1,0 +1,96 @@
+/* pomelo theme: brand colors come from the book's logo (a citrus
+ * slice), not from taste. The logo carries exactly two fills -- the
+ * ink outline #333333 and the flesh #ED8072 -- so the flesh is the
+ * brand: #333333 is a neutral (it is the text color) and would render
+ * every link invisible against the prose around it. */
+
+:root {
+  /* brand ramp anchored at the logo color */
+  --vp-c-brand-1: #b55546;              /* links: darkest, for contrast  */
+  --vp-c-brand-2: #d96b5b;              /* mid step                      */
+  --vp-c-brand-3: #ed8072;              /* the logo itself               */
+  --vp-c-brand-soft: rgba(237, 128, 114, 0.14);
+  --vp-custom-outline: var(--vp-c-brand-3);
+
+  /* buttons: solid logo color, pill shaped (radius set below) */
+  --vp-button-brand-bg: var(--vp-c-brand-3);
+  --vp-button-brand-text: #ffffff;
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-hover-text: #ffffff;
+  --vp-button-brand-active-bg: var(--vp-c-brand-1);
+  --vp-button-brand-active-text: #ffffff;
+
+  /* hero name: one solid brand color, never a gradient */
+  --vp-home-hero-name-background: var(--vp-c-brand-1);
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+
+  /* tip/info containers pick up the brand outline */
+  --vp-custom-block-tip-border-color: rgba(237, 128, 114, 0.4);
+  --vp-custom-block-tip-bg: rgba(237, 128, 114, 0.07);
+}
+
+.dark {
+  /* one step lighter than light mode: brand-on-dark goes dull fast */
+  --vp-c-brand-1: #f3a99d;
+  --vp-c-brand-2: #f08d7e;
+  --vp-c-brand-3: #ed8072;
+  --vp-c-brand-soft: rgba(237, 128, 114, 0.17);
+
+  --vp-button-brand-hover-bg: var(--vp-c-brand-2);
+  --vp-button-brand-active-bg: var(--vp-c-brand-1);
+  --vp-home-hero-name-background: var(--vp-c-brand-1);
+  --vp-home-hero-name-color: var(--vp-c-brand-1);
+}
+
+/* The default theme paints the hero name with a gradient clip; replace
+ * it with flat brand ink. */
+.VPHero .name.clip {
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+}
+
+/* pill buttons, hero actions included */
+.vp-button {
+  border-radius: 999px;
+}
+
+/* feature cards: a soft outline instead of a flat gray slab */
+.VPFeature {
+  border-color: var(--vp-c-divider);
+  transition: border-color 0.25s;
+}
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-3);
+}
+
+/* --- reading typography ------------------------------------------------ */
+
+/* roomier prose */
+.vp-doc {
+  line-height: 1.7;
+}
+
+/* Chinese paragraphs breathe: first line indented two em, the way a
+ * printed book sets them. Lists and quotes stay flush so the markers
+ * do not drift. */
+.vp-doc p {
+  text-indent: 2em;
+  margin: 1.2em 0;
+}
+.vp-doc li p,
+.vp-doc blockquote p,
+.vp-doc li,
+.vp-doc blockquote {
+  text-indent: 0;
+}
+
+/* tables, code and cards get breathing room around them */
+.vp-doc table {
+  margin: 1.6em 0;
+}
+.vp-doc div[class*="language-"],
+.vp-doc .custom-block {
+  margin: 1.4em 0;
+}
