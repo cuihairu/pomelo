@@ -10,8 +10,11 @@ hero:
       text: 开始阅读
       link: /guide/intro
     - theme: alt
-      text: GitHub
-      link: https://github.com/cuihairu/pomelo
+      text: 本地跑起来
+      link: /guide/build-and-run
+    - theme: alt
+      text: 下载 nightly
+      link: https://github.com/cuihairu/pomelo/releases/tag/nightly
 
 features:
   - title: 微内核,只有四件事
