@@ -1,5 +1,5 @@
 #include "../../kernel/types.h"
-#include "../../kernel/kprintf.h"
+#include "../../kernel/syscall/syscall.h"
 #include "fs.h"
 
 /* Primary ATA controller, LBA28, polled PIO. This is the only file in
@@ -27,10 +27,12 @@
 #define SR_DRQ 0x08
 #define SR_ERR 0x01
 
-/* Every wait below naps with hlt between polls: a tight port-poll would
- * pin the CPU for the whole transfer -- and on an emulator, starve the
- * very host thread that has to complete the command. Politeness is not
- * optional in a microkernel, even in its one polling driver. */
+/* Every wait below yields the CPU between polls: a tight port-poll would
+ * pin the machine for the whole transfer -- and on an emulator, starve the
+ * very host thread that has to complete the command. (hlt would be the
+ * classical nap, but it is ring-0 only; from ring 3 the polite move is
+ * handing the scheduler a turn.) Politeness is not optional in a
+ * microkernel, even in its one polling driver. */
 
 /* The 0xFF signature: every line high means nobody is driving the bus.
  * Also catch ABRT-style errors so we do not wait on a failed command. */
@@ -46,11 +48,8 @@ static int ata_dead(void) {
 static int ata_ready(void) {
     while (inb(ATA_STAT) & SR_BSY) {
         if (ata_dead()) return -1;
-        intr_enable();
-        halt();
-        intr_disable();
+        sys_yield();              /* hand the CPU over while the disk thinks */
     }
-    intr_enable();
     return ata_dead() ? -1 : 0;
 }
 
@@ -65,11 +64,8 @@ static int ata_drq(void) {
         if (st & SR_ERR) return -1;
         if (st == 0xFF) return -1;
         if (st & SR_DRQ) break;
-        intr_enable();
-        halt();
-        intr_disable();
+        sys_yield();
     }
-    intr_enable();
     return 0;
 }
 

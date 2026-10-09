@@ -38,6 +38,12 @@ pomelo_user(ushell
     kernel/string.c)
 pomelo_user(uprobe apps/probe/probe.c kernel/string.c)
 
+# the services themselves are user programs too: each runs in its own
+# address space, entered exactly like shell and probe
+pomelo_user(ufs  servers/fs/fs.c servers/fs/fsrw.c servers/fs/ata.c
+    kernel/string.c)
+pomelo_user(utty servers/tty/tty.c kernel/string.c)
+
 # ---------------------------------------------------------------------------
 # kernel: i386 freestanding ELF, loaded by `qemu-system-i386 -kernel`.
 # No libc, no host runtime: the whole point is "compile what you wrote".
@@ -51,17 +57,19 @@ set(KSRC
     kernel/sched/sched.c kernel/sched/switch.S
     kernel/ipc/ipc.c
     kernel/syscall/syscall.c
-    servers/fs/ata.c servers/fs/fs.c servers/fs/fsrw.c
-    servers/tty/tty.c
+    ${CMAKE_BINARY_DIR}/ufs_blob.o
+    ${CMAKE_BINARY_DIR}/utty_blob.o
     ${CMAKE_BINARY_DIR}/ushell_blob.o
     ${CMAKE_BINARY_DIR}/uprobe_blob.o)
 
-set_source_files_properties(${CMAKE_BINARY_DIR}/ushell_blob.o
+set_source_files_properties(${CMAKE_BINARY_DIR}/ufs_blob.o
+                            ${CMAKE_BINARY_DIR}/utty_blob.o
+                            ${CMAKE_BINARY_DIR}/ushell_blob.o
                             ${CMAKE_BINARY_DIR}/uprobe_blob.o
                             PROPERTIES GENERATED TRUE)
 
 add_executable(kernel ${KSRC})
-add_dependencies(kernel ushell_blob uprobe_blob)
+add_dependencies(kernel ufs_blob utty_blob ushell_blob uprobe_blob)
 target_include_directories(kernel PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(kernel PRIVATE
     -m32 -ffreestanding -fno-pie -fno-stack-protector -fno-builtin

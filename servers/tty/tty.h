@@ -10,6 +10,4 @@
 #define MSG_TTY_CLEAR   3
 #define MSG_TTY_CHAR    4   /* from the kernel: one raw input character */
 
-void tty_main(void);
-
 #endif

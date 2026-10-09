@@ -15,8 +15,6 @@
 #define MSG_FS_WRITE  5   /* arg0=inode, arg1=off, arg2=len, data -> arg0=len */
 #define MSG_FS_COMMIT 6   /* arg0=inode, arg1=size -> arg0=0 */
 
-void fs_main(void);
-
 /* ata.c: polled PIO, one sector at a time. */
 int ata_read(u32 lba, void *buf);
 int ata_write(u32 lba, const void *buf);

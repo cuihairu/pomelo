@@ -22,13 +22,6 @@ switch_to:
     popl  %ebp
     ret                         # pops the new task's resume address
 
-/* First entry into a fresh task: switch_to rets here, we switch
- * interrupts on, then ret again into the task's real entry. */
-.globl task_trampoline
-task_trampoline:
-    sti
-    ret
-
 /* First entry into a ring 3 task. The stack top is a full iret frame
  * (eip, cs, eflags, esp, ss) laid down by task_spawn_user; loading the
  * user data segments is the last thing kernel rings do on the way out. */

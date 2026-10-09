@@ -1,8 +1,13 @@
 #include "../../kernel/string.h"
-#include "../../kernel/kprintf.h"
 #include "../../kernel/syscall/syscall.h"
+#include "../../apps/con.h"
 #include "format.h"
 #include "fs.h"
+
+/* The kernel starts this program like any other: the blob's first four
+ * bytes are the entry point (see tools/user.ld). */
+void fs_main(void);
+__attribute__((section(".hdr"))) const unsigned fs_entry = (unsigned)fs_main;
 
 struct superblock sb;
 struct inode inodes[NINODES];
@@ -42,18 +47,18 @@ static void do_open(struct msg *m) {
 }
 
 void fs_main(void) {
+    struct msg m;                 /* also the forever-park mailbox below */
     if (ata_read(0, &sb) < 0) {
-        kprintf("fs: no disk behind the ata ports, staying idle\n");
-        for (;;) halt();          /* park this task; the rest lives on */
+        con_puts("fs: no disk behind the ata ports, staying idle\n");
+        for (;;) sys_recv(&m);    /* park: block forever, costs nothing */
     }
     if (sb.magic != FS_MAGIC) {
-        kprintf("fs: bad disk (magic=%x), staying idle\n", sb.magic);
-        for (;;) halt();          /* no disk: park this task */
+        con_puts("fs: bad disk magic, staying idle\n");
+        for (;;) sys_recv(&m);
     }
     for (int s = 0; s < INODE_SECTORS; s++)
         ata_read(INODE_START + s, (u8 *)inodes + s * SECTOR);
 
-    struct msg m;
     for (;;) {
         sys_recv(&m);
         switch (m.type) {

@@ -20,9 +20,15 @@ struct task {
 extern struct task tasks[NTASK];
 extern int cur;         /* running task index, -1 while in kmain */
 
+/* User eflags at spawn. Plain tasks get interrupts on; the fs service
+ * also gets IOPL=3 because its ATA driver does `in`/`out` (and cli/sti
+ * pairs around its waits) from ring 3 -- the x86 only lets a ring-3
+ * task touch ports when IOPL >= CPL. */
+#define EFLAGS_USER      0x202    /* interrupts on, reserved bit set */
+#define EFLAGS_USER_IOPL 0x3202   /* same + IOPL=3: may do port I/O */
+
 void sched_init(void);
-int  task_spawn(void (*entry)(void));  /* ring 0 service: returns tid or -1 */
-int  task_spawn_user(u32 dir, u32 entry, u32 ustack_top);  /* ring 3 */
+int  task_spawn_user(u32 dir, u32 entry, u32 ustack_top, u32 flags);
 void sched_enter(int first);           /* kmain jumps into `first` */
 void sched_tick(void);                 /* timer preemption point */
 void sched_next(void);                 /* current blocks: pick another */

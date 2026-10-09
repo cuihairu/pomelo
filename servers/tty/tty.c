@@ -2,6 +2,11 @@
 #include "../../kernel/syscall/syscall.h"
 #include "tty.h"
 
+/* The kernel starts this program like any other: the blob's first four
+ * bytes are the entry point (see tools/user.ld). */
+void tty_main(void);
+__attribute__((section(".hdr"))) const unsigned tty_entry = (unsigned)tty_main;
+
 /* tty.c: the line-discipline layer, now a pure service. Chars arrive as
  * messages from the kernel (which owns the keyboard and COM1); output
  * leaves through one syscall. Completed lines queue up until the shell
