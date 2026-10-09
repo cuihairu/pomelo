@@ -14,6 +14,7 @@
 # count as green; a silent hang does not.
 
 qemu="$1"; mach="$2"; kernel="$3"; img="$4"; out="$5"; shift 5
+mkdir -p "$out"
 
 pacing() {
     sleep 2; printf '\n'
