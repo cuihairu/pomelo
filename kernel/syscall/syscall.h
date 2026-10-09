@@ -3,6 +3,7 @@
 
 #include "../types.h"
 #include "../ipc/ipc.h"
+#include "../sched/sched.h"
 
 /* Well-known task ids, assigned in spawn order by boot/main.c. */
 #define TID_FS     1
@@ -18,6 +19,8 @@ enum {
     SYS_REBOOT   = 4,
     SYS_WRITE    = 5,   /* ebx=buf, ecx=len: console output, kernel side */
     SYS_CLEAR    = 6,   /* clear the console */
+    SYS_SPAWN    = 7,   /* ebx=name: start a registered program */
+    SYS_PS       = 8,   /* ebx=buf, ecx=max: task-table snapshot */
 };
 
 struct regs;                       /* kernel/intr/intr.h */
@@ -38,5 +41,7 @@ static inline void sys_irq_wait(int irq)            { (void)gate(SYS_IRQ_WAIT, i
 static inline void sys_reboot(void)                 { (void)gate(SYS_REBOOT, 0, 0); }
 static inline void sys_write(const char *s, int n)  { (void)gate(SYS_WRITE, (int)s, n); }
 static inline void sys_clear(void)                  { (void)gate(SYS_CLEAR, 0, 0); }
+static inline int  sys_spawn(const char *name)      { return gate(SYS_SPAWN, (int)name, 0); }
+static inline int  sys_ps(struct ps_entry *b, int n){ return gate(SYS_PS, (int)b, n); }
 
 #endif

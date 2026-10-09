@@ -7,30 +7,29 @@
 #include "../kernel/sched/sched.h"
 #include "../kernel/syscall/syscall.h"
 
-/* The user programs ride inside the kernel image as blobs and come to
- * life in their own address spaces. The first four bytes of each blob
- * are the entry point (see tools/user.ld and the .hdr section). */
+/* The user programs ride inside the kernel image as blobs; boot does
+ * not start them so much as register them and spawn the opening cast
+ * through the same door a shell command would use later. */
 extern const u8 _binary_ufs_bin_start[],    _binary_ufs_bin_end[];
 extern const u8 _binary_utty_bin_start[],   _binary_utty_bin_end[];
 extern const u8 _binary_ushell_bin_start[], _binary_ushell_bin_end[];
 extern const u8 _binary_uprobe_bin_start[], _binary_uprobe_bin_end[];
 
-static void user_start(const u8 *begin, const u8 *end, u32 flags) {
-    u32 dir = pdir_user_new((u32)begin, (u32)(end - begin));
-    if (dir) task_spawn_user(dir, *(const u32 *)begin, USER_STACK_TOP, flags);
-    else kprintf("user program dropped: no frames\n");
-}
-
 static void servers_start(void) {
     sched_init();
-    user_start(_binary_ufs_bin_start, _binary_ufs_bin_end,
-               EFLAGS_USER_IOPL);   /* -> TID_FS: ata ports at ring 3 */
-    user_start(_binary_utty_bin_start, _binary_utty_bin_end,
-               EFLAGS_USER);        /* -> TID_TTY */
-    user_start(_binary_ushell_bin_start, _binary_ushell_bin_end,
-               EFLAGS_USER);        /* -> TID_SHELL */
-    user_start(_binary_uprobe_bin_start, _binary_uprobe_bin_end,
-               EFLAGS_USER);        /* -> TID_PROBE, born to crash */
+    prog_add("fs",    _binary_ufs_bin_start,    _binary_ufs_bin_end,
+             EFLAGS_USER_IOPL);     /* the ata driver needs port rights */
+    prog_add("tty",   _binary_utty_bin_start,   _binary_utty_bin_end,
+             EFLAGS_USER);
+    prog_add("shell", _binary_ushell_bin_start, _binary_ushell_bin_end,
+             EFLAGS_USER);
+    prog_add("probe", _binary_uprobe_bin_start, _binary_uprobe_bin_end,
+             EFLAGS_USER);          /* born to crash, revivable by hand */
+
+    sched_spawn("fs");              /* spawn order fixes the task ids */
+    sched_spawn("tty");
+    sched_spawn("shell");
+    sched_spawn("probe");
 }
 
 void kmain(u32 magic, u32 info) {

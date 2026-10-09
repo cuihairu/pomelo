@@ -22,31 +22,36 @@ void sched_init(void) {
 /* A task is born in ring 3: switch_to rets into a trampoline, but this
  * one irets -- the stack below it is a complete user frame (ss, esp,
  * eflags, cs, eip, top down), so the CPU drops to ring 3 on the way in
- * and can only come back through the syscall gate. There is no ring-0
- * spawn: every service the kernel starts lives in its own address
- * space, entered exactly like a user program. */
+ * and can only come back through the syscall gate. The caller picks
+ * the seat (prog.c prefers a dead service's old one); this only builds
+ * it. The claim runs with interrupts off: a timer tick in the middle
+ * would let two spawners grab the same seat. */
 void ring3_entry(void);       /* switch.S */
 
-int task_spawn_user(u32 dir, u32 entry, u32 ustack_top, u32 flags) {
-    for (int i = 1; i < NTASK; i++) {
-        if (tasks[i].state != ST_FREE) continue;
-        u32 *sp = (u32 *)(kstacks[i] + STACK_BYTES);
-        *--sp = USER_DS;              /* ss: the frame iret walks bottom-up */
-        *--sp = ustack_top;           /* user esp */
-        *--sp = flags;                /* eflags: EFLAGS_USER, maybe + IOPL */
-        *--sp = USER_CS;              /* user cs */
-        *--sp = entry;                /* user eip */
-        *--sp = (u32)ring3_entry;     /* switch_to's ret target */
-        *--sp = 0;                    /* ebp */
-        *--sp = 0;                    /* edi */
-        *--sp = 0;                    /* esi */
-        *--sp = 0;                    /* ebx */
-        tasks[i].esp = (u32)sp;
-        tasks[i].pdir = dir;
-        tasks[i].state = ST_READY;
-        return i;
+int task_start(int slot, u32 dir, u32 entry, u32 ustack_top, u32 flags) {
+    intr_disable();
+    if (slot < 1 || slot >= NTASK || tasks[slot].state != ST_FREE) {
+        intr_enable();
+        return -1;
     }
-    return -1;
+    u32 *sp = (u32 *)(kstacks[slot] + STACK_BYTES);
+    *--sp = USER_DS;              /* ss: the frame iret walks bottom-up */
+    *--sp = ustack_top;           /* user esp */
+    *--sp = flags;                /* eflags: EFLAGS_USER, maybe + IOPL */
+    *--sp = USER_CS;              /* user cs */
+    *--sp = entry;                /* user eip */
+    *--sp = (u32)ring3_entry;     /* switch_to's ret target */
+    *--sp = 0;                    /* ebp */
+    *--sp = 0;                    /* edi */
+    *--sp = 0;                    /* esi */
+    *--sp = 0;                    /* ebx */
+    tasks[slot].esp = (u32)sp;
+    tasks[slot].pdir = dir;
+    tasks[slot].prog = 0;
+    msgq_reset(&tasks[slot].inbox);   /* a restarted service starts clean */
+    tasks[slot].state = ST_READY;
+    intr_enable();
+    return slot;
 }
 
 /* First READY task after `cur`; -1 if the current one is alone. */

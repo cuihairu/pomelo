@@ -40,6 +40,12 @@ void syscall_entry(struct regs *r) {
         con_clear();
         r->eax = 0;
         return;
+    case SYS_SPAWN:
+        r->eax = sched_spawn((const char *)r->ebx);
+        return;
+    case SYS_PS:
+        r->eax = ps_snapshot((struct ps_entry *)r->ebx, r->ecx);
+        return;
     }
     r->eax = -1;                      /* unknown syscall number */
 }

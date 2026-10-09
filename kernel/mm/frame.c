@@ -1,4 +1,5 @@
 #include "frame.h"
+#include "../intr/intr.h"
 
 /* The frame allocator is one bitmap, as the roadmap promised. Everything
  * below the end of the kernel image is marked used up front: BIOS data,
@@ -24,17 +25,22 @@ void frame_init(void) {
 }
 
 u32 frame_alloc(void) {
+    intr_disable();   /* a tick here could hand one frame to two spawners */
     for (u32 f = first_free; f < NFRAMES; f++) {
         if (!is_used(f)) {
             mark(f);
             if (f == first_free) first_free++;
+            intr_enable();
             return f * 4096;
         }
     }
+    intr_enable();
     return 0;
 }
 
 void frame_free(u32 pa) {
+    intr_disable();
     unmark(pa / 4096);
     if (pa / 4096 < first_free) first_free = pa / 4096;
+    intr_enable();
 }
