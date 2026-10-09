@@ -19,7 +19,12 @@ ctest --test-dir build          # boots in QEMU, verifies the banner
 
 ## Layout
 
-Each directory is one concept, and the book follows the same order.
+Each directory is one concept, and the book follows the same order. The split
+is the point: `kernel/` holds only the four mechanisms every task must pass
+through, `servers/` holds the user-space services, and apps reach them purely
+by passing messages. The kernel never parses a disk format and never touches
+a keyboard; the file system lives outside it so that a disk bug has to get
+through IPC before it can hurt anyone.
 
 ```
 boot/       From power-on to the first line of C: multiboot, GDT, IDT, PIT.
