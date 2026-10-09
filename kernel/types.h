@@ -26,11 +26,19 @@ static inline u16 inw(u16 port) {
     return v;
 }
 
-/* 16-bit string read from a port into memory: used by the ATA driver. */
+/* 16-bit string read/write between a port and memory: ATA driver.
+ * insw fills %es:(%edi), outsw drains %ds:(%esi); both advance their
+ * pointer and counter, so all three registers are in-out. */
 static inline void insw(u16 port, void *addr, u32 count) {
     __asm__ volatile("rep insw"
         : "+D"(addr), "+c"(count) : "d"(port) : "memory");
 }
+static inline void outsw(u16 port, const void *addr, u32 count) {
+    __asm__ volatile("rep outsw"
+        : "+S"(addr), "+c"(count) : "d"(port) : "memory");
+}
+
+#include "string.h"
 
 /* Stop the CPU until the next interrupt. */
 static inline void halt(void) {
