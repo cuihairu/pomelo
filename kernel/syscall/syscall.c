@@ -1,4 +1,5 @@
 #include "syscall.h"
+#include "../char.h"
 #include "../intr/intr.h"
 #include "../sched/sched.h"
 
@@ -30,6 +31,14 @@ void syscall_entry(struct regs *r) {
         return;
     case SYS_REBOOT:
         reboot_now();
+        return;
+    case SYS_WRITE:
+        con_write((const char *)r->ebx, r->ecx);
+        r->eax = 0;
+        return;
+    case SYS_CLEAR:
+        con_clear();
+        r->eax = 0;
         return;
     }
     r->eax = -1;                      /* unknown syscall number */

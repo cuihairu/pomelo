@@ -10,7 +10,7 @@ void msgq_reset(struct msgq *q) {
     q->head = q->count = 0;
 }
 
-int ipc_send(int dst, struct msg *m) {
+static int enqueue(int dst, struct msg *m, int src) {
     if (dst < 1 || dst >= NTASK) return -1;
     intr_disable();                       /* enqueue+wake stay atomic */
     struct msgq *q = &tasks[dst].inbox;
@@ -19,11 +19,21 @@ int ipc_send(int dst, struct msg *m) {
         return -1;                        /* caller retries or fails */
     }
     *slot(q, q->count) = *m;
-    slot(q, q->count)->src = cur;
+    slot(q, q->count)->src = src;
     q->count++;
     intr_enable();
     sched_wake(dst);                      /* maybe the receiver sleeps */
     return 0;
+}
+
+int ipc_send(int dst, struct msg *m) {
+    return enqueue(dst, m, cur);
+}
+
+/* Kernel-to-task mail: the interrupt path and syscalls deliver events
+ * this way, signed "0" because no task sent them. */
+int ipc_send_kernel(int dst, struct msg *m) {
+    return enqueue(dst, m, 0);
 }
 
 int ipc_recv(struct msg *out, int block) {

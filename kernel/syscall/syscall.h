@@ -16,6 +16,8 @@ enum {
     SYS_RECV     = 2,   /* ebx=msg*, ecx=block */
     SYS_IRQ_WAIT = 3,   /* ebx=irq mask */
     SYS_REBOOT   = 4,
+    SYS_WRITE    = 5,   /* ebx=buf, ecx=len: console output, kernel side */
+    SYS_CLEAR    = 6,   /* clear the console */
 };
 
 struct regs;                       /* kernel/intr/intr.h */
@@ -34,5 +36,7 @@ static inline int  sys_try_recv(struct msg *m)      { return gate(SYS_RECV, (int
 static inline void sys_yield(void)                  { (void)gate(SYS_YIELD, 0, 0); }
 static inline void sys_irq_wait(int irq)            { (void)gate(SYS_IRQ_WAIT, irq, 0); }
 static inline void sys_reboot(void)                 { (void)gate(SYS_REBOOT, 0, 0); }
+static inline void sys_write(const char *s, int n)  { (void)gate(SYS_WRITE, (int)s, n); }
+static inline void sys_clear(void)                  { (void)gate(SYS_CLEAR, 0, 0); }
 
 #endif

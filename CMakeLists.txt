@@ -44,7 +44,7 @@ pomelo_user(uprobe apps/probe/probe.c kernel/string.c)
 # ---------------------------------------------------------------------------
 set(KSRC
     boot/boot.S boot/gdt.c boot/main.c
-    kernel/kprintf.c kernel/string.c kernel/vga.c
+    kernel/char.c kernel/kprintf.c kernel/string.c kernel/vga.c
     kernel/intr/idt.c kernel/intr/intr.c kernel/intr/irq.c
     kernel/intr/stubs.S
     kernel/mm/frame.c kernel/mm/paging.c
@@ -52,7 +52,7 @@ set(KSRC
     kernel/ipc/ipc.c
     kernel/syscall/syscall.c
     servers/fs/ata.c servers/fs/fs.c servers/fs/fsrw.c
-    servers/tty/console.c servers/tty/kbd.c servers/tty/tty.c
+    servers/tty/tty.c
     ${CMAKE_BINARY_DIR}/ushell_blob.o
     ${CMAKE_BINARY_DIR}/uprobe_blob.o)
 

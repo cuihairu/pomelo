@@ -1,21 +1,15 @@
 #ifndef POMELO_TTY_H
 #define POMELO_TTY_H
 
-/* tty <-> shell protocol. The shell prints and reads lines only through
- * these messages; it never touches the screen or the keyboard itself. */
+/* tty protocol. The shell prints and reads lines only through these
+ * messages; it never touches the screen or the keyboard itself. Input
+ * reaches us as MSG_TTY_CHAR -- one per keystroke -- because the
+ * console hardware belongs to the kernel (kernel/char.c). */
 #define MSG_TTY_PUTS    1   /* arg0=len, data: print exactly len bytes */
 #define MSG_TTY_GETLINE 2   /* reply: arg0=len, data = the completed line */
 #define MSG_TTY_CLEAR   3
+#define MSG_TTY_CHAR    4   /* from the kernel: one raw input character */
 
 void tty_main(void);
-
-/* console.c */
-void console_init(void);
-void tty_putc(char c);
-
-/* kbd.c: one character ring, fed by the keyboard and by com1 */
-void kbd_isr(void);
-void kbd_push(char c);
-int  kbd_getc(void);
 
 #endif
