@@ -2,6 +2,7 @@
 #include "../kernel/kprintf.h"
 #include "../kernel/vga.h"
 #include "../kernel/intr/intr.h"
+#include "../kernel/mm/paging.h"
 #include "../kernel/sched/sched.h"
 #include "../kernel/syscall/syscall.h"
 
@@ -27,6 +28,9 @@ void kmain(u32 magic, u32 info) {
     idt_init();                 /* then the interrupt gates */
     pic_remap();                /* IRQs to vectors 32..47 */
     pit_init(100);              /* 100 Hz: the scheduler's heartbeat */
+
+    paging_init();              /* identity map on: addresses unchanged */
+    kprintf("paging on: low 16m identity\n");
 
     servers_start();            /* fs, tty, shell as runnable tasks */
 

@@ -16,6 +16,7 @@ set(KSRC
     kernel/kprintf.c kernel/string.c kernel/vga.c
     kernel/intr/idt.c kernel/intr/intr.c kernel/intr/irq.c
     kernel/intr/stubs.S
+    kernel/mm/frame.c kernel/mm/paging.c
     kernel/sched/sched.c kernel/sched/switch.S
     kernel/ipc/ipc.c
     kernel/syscall/syscall.c
