@@ -24,6 +24,19 @@ intr_stub_exc:
     pushl $0xDEAD
     jmp   intr_common
 
+/* 13 (general protection) and 14 (page fault) push a real error code
+ * themselves -- no fake here -- because the fault path needs to tell a
+ * ring 3 offender (kill the task) from a kernel one (panic). */
+.globl intr_stub_13
+intr_stub_13:
+    pushl $13
+    jmp   intr_common
+
+.globl intr_stub_14
+intr_stub_14:
+    pushl $14
+    jmp   intr_common
+
 .globl intr_common
 intr_common:
     pusha                       /* edi, esi, ebp, esp, ebx, edx, ecx, eax */

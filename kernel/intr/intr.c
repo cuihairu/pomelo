@@ -1,11 +1,25 @@
 #include "intr.h"
 #include "../kprintf.h"
+#include "../mm/paging.h"
 #include "../sched/sched.h"
 #include "../syscall/syscall.h"
 
 /* intr.c: the chip-level half of interrupts -- program the two 8259s,
  * give the scheduler its heartbeat, and route every frame that stubs.S
  * drops on the common path. Ownership (handlers, waiters) is irq.c. */
+
+/* Exceptions 13/14 carry a ring story: a kernel fault is a kernel bug and
+ * panics; a ring 3 task that trips the MMU is one task being bad at life,
+ * so only it is killed -- the verdict names the faulting address, then the
+ * scheduler walks away from a task that will never resume. */
+static void task_fault(struct regs *r, const char *what, u32 addr) {
+    if ((r->cs & 3) == 0)
+        panic(what, r);
+    intr_disable();
+    kprintf("task %d killed: %s at %x (eip=%x)\n", cur, what, addr, r->eip);
+    tasks[cur].state = ST_FREE;
+    sched_next();
+}
 
 void pic_remap(void) {
     outb(0x20, 0x11); outb(0xA0, 0x11);   /* ICW1: init, cascade mode */
@@ -38,6 +52,14 @@ void pit_init(u32 hz) {
 void intr_dispatch(struct regs *r) {
     if (r->int_no == 0x80) {              /* syscall gate */
         syscall_entry(r);
+        return;
+    }
+    if (r->int_no == 14) {                /* page fault */
+        task_fault(r, "page fault", cr2_fault());
+        return;
+    }
+    if (r->int_no == 13) {                /* general protection */
+        task_fault(r, "general protection fault", 0);
         return;
     }
     if (r->int_no >= 32 && r->int_no < 48) {

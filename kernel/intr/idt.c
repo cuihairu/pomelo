@@ -31,6 +31,8 @@ void idt_set(int n, u32 handler, u16 sel, u8 flags) {
 
 /* Defined in stubs.S: one tiny wrapper per vector we actually use. */
 void intr_stub_exc(void);
+void intr_stub_13(void);      /* GPF: ring 3 offender or kernel bug */
+void intr_stub_14(void);      /* page fault: same split */
 void intr_stub_32(void);      /* IRQ_PIT */
 void intr_stub_33(void);      /* IRQ_KBD */
 void intr_stub_36(void);      /* IRQ_COM1 */
@@ -40,17 +42,23 @@ void idt_init(void) {
     for (int i = 0; i < 256; i++)
         idt_set(i, 0, 0, 0);          /* not-present by default */
 
-    /* CPU exceptions share one stub: we do not decode them, we stop. */
+    /* CPU exceptions share one stub: we do not decode them, we stop.
+     * 13 and 14 are the exception: they carry an error code and are the
+     * ones a ring 3 task can trigger, so they get their own path. */
     for (int i = 0; i < 32; i++)
-        idt_set(i, (u32)intr_stub_exc, 0x08, 0x8E);
+        if (i != 13 && i != 14)
+            idt_set(i, (u32)intr_stub_exc, 0x08, 0x8E);
+    idt_set(13, (u32)intr_stub_13, 0x08, 0x8E);
+    idt_set(14, (u32)intr_stub_14, 0x08, 0x8E);
 
     /* Hardware IRQs live at 32..47 after the PIC remap. */
     idt_set(32 + IRQ_PIT,  (u32)intr_stub_32,  0x08, 0x8E);
     idt_set(32 + IRQ_KBD,  (u32)intr_stub_33,  0x08, 0x8E);
     idt_set(32 + IRQ_COM1, (u32)intr_stub_36,  0x08, 0x8E);
 
-    /* The syscall gate. */
-    idt_set(0x80, (u32)intr_stub_128, 0x08, 0x8E);
+    /* The syscall gate. DPL 3: user code may raise it, hardware IRQs may
+     * not be raised by anyone. */
+    idt_set(0x80, (u32)intr_stub_128, 0x08, 0xEE);
 
     idt_ptr.limit = sizeof(idt) - 1;
     idt_ptr.base  = (u32)idt;
