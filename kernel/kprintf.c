@@ -1,15 +1,28 @@
 #include "types.h"
 #include "kprintf.h"
+#include "vga.h"
 
-/* One tiny sink; servers/tty brings its own VGA/console code. */
-void console_putc(char c);
+/* Kernel-side console: mirrors to both the VGA screen and COM1, so
+ * boot and panic messages are visible from `qemu -serial stdio` even
+ * before the tty service exists. User tasks print through servers/tty. */
+
+
+static void ser_putc(char c) {
+    while (!(inb(0x3F8 + 5) & 0x20)) { }   /* wait for THR empty */
+    outb(0x3F8, c);
+}
+
+void console_putc(char c) {
+    vga_putc(c);
+    ser_putc(c);
+}
 
 static void emit(const char *s, u32 n) {
     for (u32 i = 0; i < n; i++)
         console_putc(s[i]);
 }
 
-/* Print a number in the given base, writing backwards then reversing. */
+/* Print a number in the given base, filling backwards then reversing. */
 static void emit_num(u32 v, u32 base, int upper) {
     char buf[32];
     static const char *lo = "0123456789abcdef";
@@ -31,7 +44,7 @@ void kprintf(const char *fmt, ...) {
         case 's': {
             const char *s = __builtin_va_arg(ap, const char *);
             if (!s) s = "(null)";
-            emit(s, 6); /* small cap on purpose: kernel strings are short */
+            emit(s, strnlen(s, 512));
             break;
         }
         case 'c': console_putc((char)__builtin_va_arg(ap, int)); break;
