@@ -54,9 +54,12 @@ is the point: `kernel/` holds only the five mechanisms every task must pass
 through, `servers/` holds the user-space services, and apps reach them purely
 by passing messages. The kernel never parses a disk format; the file system
 lives outside it so that a disk bug has to get through IPC before it can hurt
-anyone. The one piece of hardware the kernel does own is the console: the
-keyboard and serial interrupts land in `kernel/char.c`, which turns each
-character into a message for the tty service — output is one syscall away.
+anyone. And a crashed service comes back the way it was born: `spawn` asks by
+name, the kernel rebuilds it in its old seat — same task id, same senders
+still addressing it. The one piece of hardware the kernel does own is the
+console: the keyboard and serial interrupts land in `kernel/char.c`, which
+turns each character into a message for the tty service — output is one
+syscall away.
 
 ```
 boot/       From power-on to the first line of C: multiboot, GDT, IDT, PIT.
