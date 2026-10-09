@@ -50,14 +50,16 @@ static const struct cmd cmds[] = {
 void cmd_cat(int argc, char **argv) {
     if (argc < 2) { tty_puts("usage: cat <file>\n"); return; }
 
-    struct msg m;
-    fs_req(FS_OPEN, argv[1], &m);             /* 问 fs:有这文件吗 */
-    if (m.arg0 < 0) { tty_puts("no such file\n"); return; }
-    int size = m.arg0;
+    int size;
+    int ino = fs_open(argv[1], &size);        /* 问 fs:有这文件吗 */
+    if (ino < 0) { tty_puts("no such file\n"); return; }
 
-    for (int off = 0; off < size; off += MSG_DATA_MAX) {
-        fs_req2(FS_READ, m.arg0, off, &m);    /* 分批取数据 */
-        tty_write(m.data, ...);
+    char buf[MSG_DATA];
+    for (int off = 0; off < size; ) {
+        int n = fs_read(ino, off, buf);       /* 分批取数据 */
+        if (n <= 0) break;
+        tty_write(buf, n);
+        off += n;
     }
 }
 ```

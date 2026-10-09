@@ -11,8 +11,8 @@ Pomelo 的消息是定长的,足够简单:
 struct msg {
     int src;              /* 谁发的,内核代填 */
     int type;             /* 请求类型:FS_READ / TTY_GETLINE ... */
-    int arg0, arg1;       /* 两个参数,具体含义由 type 约定 */
-    char data[16];        /* 一小段随行数据,如文件名 */
+    int arg0, arg1, arg2; /* 三个参数,具体含义由 type 约定 */
+    char data[56];        /* 一小段随行数据,如文件名 */
 };
 ```
 
@@ -25,22 +25,42 @@ struct msg {
 
 ```c
 int ipc_send(int dst, struct msg *m) {
-    if (ipc_enqueue(dst, m) < 0) return -1;   /* 队列满,先返回失败 */
-    if (tasks[dst].state == BLOCKED)
-        sched_wake(dst);                      /* 收件人可能正等着,叫醒它 */
+    if (dst < 1 || dst >= NTASK) return -1;
+    intr_disable();                       /* 入队+唤醒保持原子 */
+    struct msgq *q = &tasks[dst].inbox;
+    if (q->count == MSGQ_CAP) {
+        intr_enable();
+        return -1;                        /* 队列满,先返回失败 */
+    }
+    *slot(q, q->count) = *m;              /* slot:head 起第 i 个槽位 */
+    slot(q, q->count)->src = cur;
+    q->count++;
+    intr_enable();
+    sched_wake(dst);                      /* 收件人可能正等着,叫醒它 */
     return 0;
 }
 
-int ipc_recv(struct msg *out) {
-    while (ipc_empty(cur))                    /* 没消息就睡,直到被唤醒 */
-        sched_block();
-    ipc_dequeue(cur, out);
-    return 0;
+int ipc_recv(struct msg *out, int block) {
+    for (;;) {
+        intr_disable();
+        struct msgq *q = &tasks[cur].inbox;
+        if (q->count) {
+            *out = *slot(q, 0);           /* 永远从队头取 */
+            q->head = (q->head + 1) % MSGQ_CAP;
+            q->count--;
+            intr_enable();
+            return 0;
+        }
+        if (!block) { intr_enable(); return -1; }
+        tasks[cur].state = ST_BLOCKED;    /* 睡,直到有人发消息 */
+        sched_next();
+    }
 }
 ```
 
-注意 `ipc_recv` 的循环:被唤醒不代表一定有消息(可能是别的原因醒的),所以要
-**循环检查**。写成 `if` 会偶发地拿到空消息——这是并发代码的经典陷阱。
+两段各有讲究:`ipc_send` 把“入队+唤醒”整个关在关中断的临界区里——投递到一半
+被时钟打断,消息会处于半截状态;`ipc_recv` 的**循环检查**则是并发课的经典陷阱:
+被唤醒不代表一定有消息,写成 `if` 会偶发地拿到空答案。
 
 ## 一次 shell 读文件,消息如何往返
 

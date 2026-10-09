@@ -1,17 +1,29 @@
 # 11 · 构建与运行
 
-对应代码:`CMakeLists.txt`、`tools/mkfs/mkfs.c`
+对应代码:`CMakeLists.txt`、`tools/mkfs/mkfs.c`、`tools/smoke.sh`
 
 ## 两条命令
 
 ```sh
 cmake -B build && cmake --build build
-qemu-system-i386 -kernel build/kernel.elf -hda build/pomelo.img -serial stdio
+qemu-system-i386 -kernel build/kernel -hda build/pomelo.img -serial stdio
 ```
 
-第一条产出两个文件:`build/kernel.elf`(内核)和 `build/pomelo.img`(磁盘镜像)。
+第一条产出两个文件:`build/kernel`(内核)和 `build/pomelo.img`(磁盘镜像)。
 第二条:QEMU 充当引导器加载 ELF,同时把镜像接到主 IDE 盘上,串口转发到当前终端。
 `make run`(CMake 里的自定义目标)等价于第二条。
+
+## 冒烟测试:CI 里跑的也是它
+
+构建产物对不对,QEMU 说了算。`tools/smoke.sh` 开一台无显示的 QEMU,从串口
+替你敲 `help`、`ls`、`cat hello.txt`,然后 grep 期望的输出:
+
+```sh
+ctest --test-dir build          # 或: cmake --build build -t test
+```
+
+测试是**节奏驱动**的:每条命令之间隔一秒——tty 一个中断才处理几个字符,
+ burst 输入会撑爆它的行缓冲。给真机上电之前先让它自己跑一遍,这习惯值回票价。
 
 ## 交叉编译?不,本机编译就够
 
@@ -66,8 +78,9 @@ add_custom_command(OUTPUT pomelo.img
 ## 本章文件
 
 ```
-CMakeLists.txt       顶层构建:内核、mkfs、镜像、run 目标
+CMakeLists.txt       顶层构建:内核、mkfs、镜像、run 目标、smoke 测试
 tools/mkfs/mkfs.c    宿主机磁盘镜像生成器
+tools/smoke.sh       QEMU 冒烟测试:串口驱动 shell,grep 验证
 boot/kernel.ld       链接脚本
 ```
 

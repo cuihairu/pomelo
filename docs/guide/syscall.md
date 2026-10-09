@@ -23,18 +23,29 @@ enum {
 };
 ```
 
-内核侧就是按号分派。参数走寄存器(eax=号,ebx/ecx/edx=参),返回值放 eax:
+内核侧就是按号分派。参数走寄存器(eax=号,ebx/ecx=参),返回值写回 eax:
 
 ```c
-int syscall_dispatch(struct regs *r) {
+void syscall_entry(struct regs *r) {
     switch (r->eax) {
-    case SYS_YIELD:    sched_yield();          return 0;
-    case SYS_SEND:     return ipc_send(r->ebx, (struct msg *)r->ecx);
-    case SYS_RECV:     return ipc_recv((struct msg *)r->ebx);
-    case SYS_IRQ_WAIT: irq_wait(r->ebx);       return 0;
-    case SYS_REBOOT:   reboot();
+    case SYS_YIELD:
+        sched_tick();                 /* 轮转:把 CPU 交给下一位 */
+        r->eax = 0;
+        return;
+    case SYS_SEND:
+        r->eax = ipc_send(r->ebx, (struct msg *)r->ecx);
+        return;
+    case SYS_RECV:
+        r->eax = ipc_recv((struct msg *)r->ebx, r->ecx);
+        return;
+    case SYS_IRQ_WAIT:
+        irq_wait(r->ebx);             /* ebx 是 IRQ 掩码 */
+        r->eax = 0;
+        return;
+    case SYS_REBOOT:
+        reboot_now();                 /* 往 0x64 口打一拍,重启 */
     }
-    return -1;
+    r->eax = -1;                      /* 没这个号 */
 }
 ```
 

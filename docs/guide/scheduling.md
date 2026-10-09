@@ -10,11 +10,14 @@
 ```c
 struct task {
     u32        esp;       /* 现场保存点:swap 时把 esp 存在这 */
-    void      *stack;     /* 这块栈的基址,回收/调试用 */
-    int        state;     /* RUNNING / READY / BLOCKED */
+    int        state;     /* FREE / READY / BLOCKED */
+    int        woke;      /* 被 sched_wake 碰过;irq_wait 靠它认出“为消息而醒” */
     struct msgq inbox;    /* 它自己的消息队列,IPC 章详解 */
 };
 ```
+
+栈是从一张静态大数组里切出来的(每任务 4 KB)——教学内核不搞分配器,连栈都
+先量好尺寸。
 
 `esp` 是全部秘密所在。所谓“切换”,就是**换掉 esp 再 `ret`**——CPU 就会用另一个
 栈的现场继续跑。
@@ -25,21 +28,26 @@ struct task {
 
 ```asm
 switch_to:
+    cli                    # 换栈中途被时钟打断,两个栈都得坏
+    movl  4(%esp), %eax    # &old->esp
+    movl  8(%esp), %edx    # new->esp
     pushl %ebp
-    pushl %ebx
-    pushl %esi
     pushl %edi
+    pushl %esi
+    pushl %ebx
     movl  %esp, (%eax)     # 把当前 esp 存进 old->esp
-    movl  4(%esp), %esp    # 取出 new->esp
-    popl  %edi
-    popl  %esi
+    movl  %edx, %esp       # 换成新任务的栈
     popl  %ebx
+    popl  %esi
+    popl  %edi
     popl  %ebp
     ret                    # 用新任务的返回地址继续
 ```
 
-一次调用把**调用者寄存器**压栈、换栈、再弹回——从新栈里 `ret` 出去时,CPU 已经
-在跑另一个任务了。C 编译器保证的 callee-saved 寄存器恰好这四个,压它们就够了。
+一次调用把**被调用者要保存的寄存器**压栈、换栈、再弹回——从新栈里 `ret` 出去
+时,CPU 已经在跑另一个任务了。C 编译器保证的 callee-saved 寄存器恰好这四个,
+压它们就够了。`cli` 关中断护住换栈的几条指令;全新任务的第一次 `ret` 落在一个
+只有 `sti; ret` 两行的跳板上,从中断关着的状态安全进入任务世界。
 
 ## 何时切
 
@@ -52,33 +60,39 @@ Pomelo 是**协作 + 抢占**的混合体,但主动作是抢占:
 
 ```c
 void sched_tick(void) {
-    if (cur == NULL) return;
-    next = (cur + 1) % ntasks;
-    while (tasks[next].state == BLOCKED && next != cur)
-        next = (next + 1) % ntasks;
-    if (next != cur) sched_switch(next);
+    if (cur < 0) return;
+    int next = pick_ready();          /* cur 之后第一个 READY 的任务 */
+    if (next >= 0) sched_switch(next);
 }
 ```
 
-朴素轮转(round-robin):从当前任务往后找第一个没阻塞的。
+朴素轮转(round-robin):从当前任务往后找第一个没阻塞的。10 ms 一轮,
+谁也别想独占 CPU。
 
 ## 阻塞:让出 CPU 的正当理由
 
-一个任务在等 IPC 消息或等中断时,把状态置 `BLOCKED`,再让出。调度器会跳过它:
+一个任务在等 IPC 消息或等中断时,把状态置 `BLOCKED`,再调 `sched_next` 让出。
+调度器会跳过它:
 
 ```c
-void sched_block(void) {
-    tasks[cur].state = BLOCKED;
-    sched_tick();                 /* 立刻换人 */
-}
-
 void sched_wake(int tid) {
-    tasks[tid].state = READY;     /* 下次轮到它就能跑 */
+    if (tasks[tid].state == ST_BLOCKED) {
+        tasks[tid].state = ST_READY;
+        tasks[tid].woke = 1;          /* 告诉 irq_wait:是我叫的你 */
+    }
 }
 ```
 
 `irq_raise` 和 `ipc_send` 干的就是 `sched_wake` 这件事——**中断和消息都能唤醒任务**。
 这是整本书反复出现的同一招。
+
+## 没人可跑:去睡觉,别空转
+
+如果所有任务都 BLOCKED 了呢?这不是死锁——每个服务都正等着自己的硬件。
+`sched_next` 会把 CPU 停进 `hlt`:中断一开,CPU 睡到下一个中断(最不济是
+100 Hz 的时钟)再叫人。还有一条细腻的出路:如果时钟刚好叫醒的就是正在做
+“阻塞自己”这件事的任务,`sched_next` 发现场上已是 READY,直接返回——阻塞
+当场作废。判断、入睡、复检,必须关中断一口气做完。
 
 ## 本章文件
 
