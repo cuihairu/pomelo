@@ -101,8 +101,9 @@ void sched_wake(int tid) {
 
 ```
 kernel/sched/sched.h    task 结构、任务表与 API
-kernel/sched/sched.c    创建任务、轮转、阻塞/唤醒
+kernel/sched/sched.c    占座建任务、轮转、阻塞/唤醒
 kernel/sched/switch.S   switch_to 寄存器换栈
+kernel/sched/prog.c     程序注册表、sched_spawn、ps_snapshot(第 15 章)
 ```
 
 下一章:[IPC](/guide/ipc)。
