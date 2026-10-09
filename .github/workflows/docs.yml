@@ -32,7 +32,7 @@ jobs:
           cache-dependency-path: docs/pnpm-lock.yaml
       - name: install
         working-directory: docs
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.minimum-release-age=0
       - name: build
         working-directory: docs
         run: pnpm run build
