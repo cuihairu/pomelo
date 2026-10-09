@@ -20,6 +20,8 @@ void cmd_cat(int argc, char **argv);
 void cmd_write(int argc, char **argv);
 void cmd_clear(int argc, char **argv);
 void cmd_reboot(int argc, char **argv);
+void cmd_ps(int argc, char **argv);
+void cmd_spawn(int argc, char **argv);
 
 /* shell.c: tty client helpers */
 void tty_puts(const char *s);

@@ -10,5 +10,7 @@ void cmd_help(int argc, char **argv) {
     tty_puts("  cat <file>      print a file\n");
     tty_puts("  write <f> <t>   create a file with text\n");
     tty_puts("  clear           clear the screen\n");
+    tty_puts("  ps              list the task table\n");
+    tty_puts("  spawn <name>    start a program (fs, tty, shell, probe)\n");
     tty_puts("  reboot          restart the machine\n");
 }

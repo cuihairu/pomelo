@@ -34,7 +34,7 @@ endfunction()
 
 pomelo_user(ushell
     apps/shell/shell.c apps/shell/fsio.c apps/shell/cmd_fs.c
-    apps/shell/cmd_help.c apps/shell/cmd_sys.c
+    apps/shell/cmd_help.c apps/shell/cmd_sys.c apps/shell/cmd_proc.c
     kernel/string.c)
 pomelo_user(uprobe apps/probe/probe.c kernel/string.c)
 
