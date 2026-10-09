@@ -47,30 +47,37 @@ _start:
 `boot/main.c` 里的 `kmain` 是整条启动链的收束口,顺序不能乱:
 
 ```c
-void kmain(unsigned magic, unsigned info) {
+void kmain(u32 magic, u32 info) {
     (void)info;
-    console_init();          /* 1. 先有个能打字的屏幕 */
-    kprintf("pomelo booting (magic=%x)\n", magic);
+    vga_clear();
+    kprintf("pomelo booting (multiboot magic=%x)\n", magic);
 
-    gdt_init();              /* 2. 段表,之后才敢装中断 */
-    idt_init();              /* 3. 中断门 */
-    pic_remap();             /* 4. 重映射 8259,让 IRQ 不再撞异常 */
-    pit_init(100);           /* 5. 100Hz 时钟,调度的心跳 */
+    gdt_init();                 /* segments first: IDT entries point at 0x08 */
+    idt_init();                 /* then the interrupt gates */
+    pic_remap();                /* IRQs to vectors 32..47 */
+    pit_init(100);              /* 100 Hz: the scheduler's heartbeat */
 
-    servers_start();         /* 6. 创建 fs / tty / shell 三个任务 */
-    intr_enable();           /* 7. 开中断,世界开始转动 */
+    paging_init();              /* identity map on: addresses unchanged */
+    kprintf("paging on: low 16m identity\n");
 
-    for (;;) __asm__ volatile("hlt");   /* 内核本体空闲 */
+    servers_start();            /* fs, tty, shell, probe as runnable tasks */
+
+    intr_enable();              /* only now may interrupts fire */
+    sched_enter(TID_FS);        /* kmain hands the stage to the services */
 }
 ```
 
-注意最后这个死循环:内核 `kmain` 建完舞台就**主动让出 CPU**。此后所有工作都发生在
-`servers_start` 创建的任务里。这正是微内核的姿态——内核不是主角,只是舞台。
+注意最后这一跳:`kmain` 建完舞台就把 CPU 交给第一个任务,自己的栈被记成
+"任务 0",永远停在 `switch_to` 里。此后所有工作都发生在 `servers_start` 创建的
+任务里。这正是微内核的姿态——内核不是主角,只是舞台。
 
 ## 一个顺序上的坑
 
 必须先 `idt_init` 再 `intr_enable`。如果在中断门还没装好时就开中断,第一个时钟滴答
 会跳到一个空向量,机器当场三重故障复位。初学内核最常见的“一开机就重启”多半是这个。
+
+分页同理:`paging_init` 在 `servers_start` 之前——页表建好、PG 位翻开,任务才
+有资格上场;反过来,任务跑起来再建页表,第一个任务就会踩进还没映射的地址。
 
 ## 本章文件
 

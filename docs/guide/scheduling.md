@@ -10,6 +10,7 @@
 ```c
 struct task {
     u32        esp;       /* 现场保存点:swap 时把 esp 存在这 */
+    u32        pdir;      /* 页目录,0 = 用内核自己的;第 14 章 */
     int        state;     /* FREE / READY / BLOCKED */
     int        woke;      /* 被 sched_wake 碰过;irq_wait 靠它认出“为消息而醒” */
     struct msgq inbox;    /* 它自己的消息队列,IPC 章详解 */
@@ -20,7 +21,8 @@ struct task {
 先量好尺寸。
 
 `esp` 是全部秘密所在。所谓“切换”,就是**换掉 esp 再 `ret`**——CPU 就会用另一个
-栈的现场继续跑。
+栈的现场继续跑。`pdir` 是 ring 3 任务多出来的一半:切换时除了换栈,还要换
+cr3,两个内核服务任务之间,地址空间跟着走(第 14 章详解)。
 
 ## 上下文切换:一段不得不看的汇编
 

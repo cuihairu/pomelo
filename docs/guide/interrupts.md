@@ -37,11 +37,21 @@ STUB 32                       # 时钟(PIT)
 STUB 33                       # 键盘
 STUB 36                       # 串口
 STUB 128                      # 系统调用门
+
+# 13 和 14 由 CPU 推错误码,桩里不再补 0(见下文)
+intr_stub_13:
+    pushl $13
+    jmp   intr_common
+intr_stub_14:
+    pushl $14
+    jmp   intr_common
 ```
 
-CPU 异常(0–31 号)不逐个解码:教学内核遇到异常就意味着出了大错,所以它们共用
-一个桩,打一行 PANIC 然后停机。`intr_common` 把现场保存成 `regs` 结构,交给 C
-的分发函数。
+CPU 异常(0–31 号)大多不逐个解码:内核态遇到异常就意味着出了大错,共用
+一个桩,打一行 PANIC 然后停机。两个例外是 13(general protection)和
+14(page fault)——它们自带错误码,而且可能是 ring 3 任务惹的祸,得逐个
+查明再决定杀谁,见[第 14 章](/guide/ring3)。`intr_common` 把现场保存成
+`regs` 结构,交给 C 的分发函数。
 
 ## 分发:先应答,再唤醒
 
