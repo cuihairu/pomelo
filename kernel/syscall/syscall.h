@@ -5,9 +5,10 @@
 #include "../ipc/ipc.h"
 
 /* Well-known task ids, assigned in spawn order by boot/main.c. */
-#define TID_FS    1
-#define TID_TTY   2
-#define TID_SHELL 3
+#define TID_FS     1
+#define TID_TTY    2
+#define TID_SHELL  3
+#define TID_PROBE  4
 
 enum {
     SYS_YIELD    = 0,   /* give up the rest of this time slice */

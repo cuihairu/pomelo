@@ -8,6 +8,37 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 # ---------------------------------------------------------------------------
+# user programs: linked at 0x40000000 (their own address space), stripped
+# to flat binaries and embedded in the kernel as blobs.
+# ---------------------------------------------------------------------------
+function(pomelo_user name)
+    add_executable(${name} ${ARGN})
+    target_include_directories(${name} PRIVATE ${CMAKE_SOURCE_DIR})
+    target_compile_options(${name} PRIVATE
+        -m32 -ffreestanding -fno-pie -fno-stack-protector -fno-builtin
+        -fno-asynchronous-unwind-tables -fcf-protection=none
+        -O2 -g -Wall -Wextra)
+    target_link_options(${name} PRIVATE
+        -m32 -nostdlib -no-pie -static -Wl,--build-id=none
+        -T ${CMAKE_SOURCE_DIR}/tools/user.ld -e 0x40000000)
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/${name}.bin
+        COMMAND objcopy -O binary $<TARGET_FILE:${name}>
+                ${CMAKE_BINARY_DIR}/${name}.bin
+        DEPENDS ${name})
+    add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/${name}_blob.o
+        COMMAND ${CMAKE_COMMAND} -E chdir ${CMAKE_BINARY_DIR}
+                ld -m elf_i386 -r -b binary -o ${name}_blob.o ${name}.bin
+        DEPENDS ${CMAKE_BINARY_DIR}/${name}.bin)
+    add_custom_target(${name}_blob DEPENDS ${CMAKE_BINARY_DIR}/${name}_blob.o)
+endfunction()
+
+pomelo_user(ushell
+    apps/shell/shell.c apps/shell/fsio.c apps/shell/cmd_fs.c
+    apps/shell/cmd_help.c apps/shell/cmd_sys.c
+    kernel/string.c)
+pomelo_user(uprobe apps/probe/probe.c kernel/string.c)
+
+# ---------------------------------------------------------------------------
 # kernel: i386 freestanding ELF, loaded by `qemu-system-i386 -kernel`.
 # No libc, no host runtime: the whole point is "compile what you wrote".
 # ---------------------------------------------------------------------------
@@ -22,10 +53,15 @@ set(KSRC
     kernel/syscall/syscall.c
     servers/fs/ata.c servers/fs/fs.c servers/fs/fsrw.c
     servers/tty/console.c servers/tty/kbd.c servers/tty/tty.c
-    apps/shell/shell.c apps/shell/fsio.c apps/shell/cmd_fs.c
-    apps/shell/cmd_help.c apps/shell/cmd_sys.c)
+    ${CMAKE_BINARY_DIR}/ushell_blob.o
+    ${CMAKE_BINARY_DIR}/uprobe_blob.o)
+
+set_source_files_properties(${CMAKE_BINARY_DIR}/ushell_blob.o
+                            ${CMAKE_BINARY_DIR}/uprobe_blob.o
+                            PROPERTIES GENERATED TRUE)
 
 add_executable(kernel ${KSRC})
+add_dependencies(kernel ushell_blob uprobe_blob)
 target_include_directories(kernel PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(kernel PRIVATE
     -m32 -ffreestanding -fno-pie -fno-stack-protector -fno-builtin

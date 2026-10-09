@@ -1,5 +1,7 @@
 #include "sched.h"
 #include "../intr/intr.h"
+#include "../mm/paging.h"
+#include "../../boot/gdt.h"
 
 struct task tasks[NTASK];
 int cur = -1;
@@ -12,6 +14,7 @@ void sched_init(void) {
     for (int i = 0; i < NTASK; i++) {
         tasks[i].state = ST_FREE;
         tasks[i].woke = 0;
+        tasks[i].pdir = 0;
         msgq_reset(&tasks[i].inbox);
     }
 }
@@ -32,6 +35,35 @@ int task_spawn(void (*entry)(void)) {
         *--sp = 0;                    /* esi */
         *--sp = 0;                    /* ebx */
         tasks[i].esp = (u32)sp;
+        tasks[i].pdir = 0;
+        tasks[i].state = ST_READY;
+        return i;
+    }
+    return -1;
+}
+
+/* A ring 3 task starts the same way -- switch_to rets into a trampoline --
+ * but this one irets: the stack below it is a complete user frame (ss,
+ * esp, eflags, cs, eip, top down), so the CPU drops to ring 3 on the way
+ * in and can only come back through the syscall gate. */
+void ring3_entry(void);       /* switch.S */
+
+int task_spawn_user(u32 dir, u32 entry, u32 ustack_top) {
+    for (int i = 1; i < NTASK; i++) {
+        if (tasks[i].state != ST_FREE) continue;
+        u32 *sp = (u32 *)(kstacks[i] + STACK_BYTES);
+        *--sp = USER_DS;              /* ss: the frame iret walks bottom-up */
+        *--sp = ustack_top;           /* user esp */
+        *--sp = 0x202;                /* eflags: interrupts on */
+        *--sp = USER_CS;              /* user cs */
+        *--sp = entry;                /* user eip */
+        *--sp = (u32)ring3_entry;     /* switch_to's ret target */
+        *--sp = 0;                    /* ebp */
+        *--sp = 0;                    /* edi */
+        *--sp = 0;                    /* esi */
+        *--sp = 0;                    /* ebx */
+        tasks[i].esp = (u32)sp;
+        tasks[i].pdir = dir;
         tasks[i].state = ST_READY;
         return i;
     }
@@ -47,9 +79,14 @@ static int pick_ready(void) {
     return -1;
 }
 
+/* The world switches with the task: cr3 selects whose pages are real,
+ * and esp0 points the CPU at this task's kernel stack for when ring 3
+ * next knocks on a gate. */
 static void sched_switch(int next) {
     int prev = cur;
     cur = next;
+    tss_esp0_set((u32)(kstacks[next] + STACK_BYTES));
+    load_cr3(tasks[next].pdir ? tasks[next].pdir : (u32)kernel_pdir);
     switch_to(&tasks[prev].esp, tasks[next].esp);
 }
 
@@ -86,6 +123,8 @@ void sched_wake(int tid) {
 /* kmain becomes "task 0": its saved esp is parked in tasks[0] forever. */
 void sched_enter(int first) {
     cur = first;
+    tss_esp0_set((u32)(kstacks[first] + STACK_BYTES));
+    load_cr3(tasks[first].pdir ? tasks[first].pdir : (u32)kernel_pdir);
     switch_to(&tasks[0].esp, tasks[first].esp);
     panic("sched_enter returned", 0);
 }

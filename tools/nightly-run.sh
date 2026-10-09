@@ -30,6 +30,8 @@ pacing() {
 
 grep -q 'pomelo booting' "$out/serial.log" || { echo "FAIL: no boot banner"; exit 1; }
 grep -q "pomelo shell"   "$out/serial.log" || { echo "FAIL: shell never spoke"; exit 1; }
+grep -q 'probe: alive at ring 3' "$out/serial.log" || { echo "FAIL: probe never spoke"; exit 1; }
+grep -q 'killed: page fault'     "$out/serial.log" || { echo "FAIL: probe was not killed"; exit 1; }
 if grep -q 'no disk behind the ata ports' "$out/serial.log"; then
     echo "note: machine $mach has no legacy ide disk; shell-only checks"
 else

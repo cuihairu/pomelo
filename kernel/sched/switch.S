@@ -28,3 +28,13 @@ switch_to:
 task_trampoline:
     sti
     ret
+
+/* First entry into a ring 3 task. The stack top is a full iret frame
+ * (eip, cs, eflags, esp, ss) laid down by task_spawn_user; loading the
+ * user data segments is the last thing kernel rings do on the way out. */
+.globl ring3_entry
+ring3_entry:
+    movw $0x23, %ax
+    movw %ax, %ds
+    movw %ax, %es
+    iret

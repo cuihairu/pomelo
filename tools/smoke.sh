@@ -18,3 +18,6 @@ qemu="$1"; kernel="$2"; img="$3"; out="$4"
       -serial stdio -display none -no-reboot > "$out" 2>&1
 
 grep -q 'hello from the pomelo disk' "$out"
+# the ring 3 probe: alive, then rightly killed for touching kernel memory
+grep -q 'probe: alive at ring 3' "$out"
+grep -q 'killed: page fault' "$out"

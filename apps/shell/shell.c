@@ -3,6 +3,12 @@
 
 /* REPL: prompt, read one line via tty, dispatch from a table. */
 
+/* The kernel reads the first four bytes of the embedded blob to find
+ * this: the entry point of the program (see tools/user.ld). */
+void shell_main(void);
+__attribute__((section(".hdr")))
+const unsigned shell_entry = (unsigned)shell_main;
+
 static const struct cmd cmds[] = {
     { "help",   cmd_help   },
     { "ls",     cmd_ls     },

@@ -11,6 +11,7 @@ enum { ST_FREE, ST_READY, ST_BLOCKED };
 
 struct task {
     u32 esp;            /* saved kernel sp while not running */
+    u32 pdir;           /* page directory, 0 = the kernel's own */
     int state;
     int woke;           /* set by sched_wake; checked by irq_wait */
     struct msgq inbox;  /* this task's messages, see kernel/ipc */
@@ -20,7 +21,8 @@ extern struct task tasks[NTASK];
 extern int cur;         /* running task index, -1 while in kmain */
 
 void sched_init(void);
-int  task_spawn(void (*entry)(void));  /* returns tid or -1 */
+int  task_spawn(void (*entry)(void));  /* ring 0 service: returns tid or -1 */
+int  task_spawn_user(u32 dir, u32 entry, u32 ustack_top);  /* ring 3 */
 void sched_enter(int first);           /* kmain jumps into `first` */
 void sched_tick(void);                 /* timer preemption point */
 void sched_next(void);                 /* current blocks: pick another */
