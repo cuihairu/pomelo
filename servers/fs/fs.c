@@ -42,7 +42,10 @@ static void do_open(struct msg *m) {
 }
 
 void fs_main(void) {
-    ata_read(0, &sb);
+    if (ata_read(0, &sb) < 0) {
+        kprintf("fs: no disk behind the ata ports, staying idle\n");
+        for (;;) halt();          /* park this task; the rest lives on */
+    }
     if (sb.magic != FS_MAGIC) {
         kprintf("fs: bad disk (magic=%x), staying idle\n", sb.magic);
         for (;;) halt();          /* no disk: park this task */
