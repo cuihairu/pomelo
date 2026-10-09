@@ -33,7 +33,7 @@ qemu-system-i386 -kernel build/kernel -hda build/pomelo.img -serial stdio
 
 命令里没写机型,默认就是 `pc`——主 IDE 盘挂在这台机器的 PIIX3 上。别特意加
 `-M q35`:那台机器的盘走 AHCI,ATA 端口悬空,fs 服务会打印一行提示然后停在
-原地。这是设计好的降级,不是卡死,见[第 7 章](/guide/disk-format)的 ata.c。
+原地。这是设计好的降级,不是卡死,见[第 8 章](/guide/fs-server)的 ata.c。
 
 ## 冒烟测试:CI 里跑的也是它
 

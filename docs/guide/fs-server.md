@@ -9,47 +9,59 @@
 
 ```c
 void fs_main(void) {
-    if (ata_read(0, &sb) || sb.magic != SB_MAGIC) {
-        kprintf("fs: bad disk\n");
-        return;                       /* 没盘就躺平,别拖垮系统 */
+    if (ata_read(0, &sb) < 0) {
+        kprintf("fs: no disk behind the ata ports, staying idle\n");
+        for (;;) halt();          /* park this task; the rest lives on */
+    }
+    if (sb.magic != FS_MAGIC) {
+        kprintf("fs: bad disk (magic=%x), staying idle\n", sb.magic);
+        for (;;) halt();
     }
     struct msg m;
     for (;;) {
         sys_recv(&m);
         switch (m.type) {
-        case FS_LS:    do_ls(&m);      break;
-        case FS_OPEN:  do_open(&m);    break;
-        case FS_READ:  do_read(&m);    break;
-        case FS_WRITE: do_write(&m);   break;
+        case MSG_FS_LS:     do_ls(&m);     break;
+        case MSG_FS_OPEN:   do_open(&m);   break;
+        case MSG_FS_READ:   do_read(&m);   break;
+        case MSG_FS_CREATE: do_create(&m); break;
+        case MSG_FS_WRITE:  do_write(&m);  break;
+        case MSG_FS_COMMIT: do_commit(&m); break;
         }
     }
 }
 ```
+
+“躺平”是有讲究的:fs 只 `halt` 停下自己这一个任务,内核和其余服务照常活着。
+用户敲 `ls` 会得不到回音,但 shell 没死、tty 没死——故障被关在一个服务里,
+这正是把文件系统放内核外面买到的保险。
 
 一眼望去像个网络服务器——事实上它就是。微内核里的“系统服务”和分布式系统里的
 “服务”在结构上没有区别,这正是微内核教学的价值。
 
 ## ATA:跟 1980 年代的硬盘说话
 
-读一个扇区(`servers/fs/ata.c`)是纯粹的时序等待:
+读一个扇区(`servers/fs/ata.c`)是三步:发命令,等数据就绪,搬数据:
 
 ```c
 int ata_read(u32 lba, void *buf) {
-    ata_wait();                    /* 等盘不再忙 */
-    outb(0x1F2, 1);                /* 读 1 扇区 */
-    outb(0x1F3, lba);              /* LBA 拆成 4 段写进端口 */
-    outb(0x1F4, lba >> 8);
-    outb(0x1F5, lba >> 16);
-    outb(0x1F6, 0xE0 | (lba >> 24) & 0xF);
-    outb(0x1F7, 0x20);             /* 0x20 = READ SECTORS 命令 */
-    ata_wait();
-    insw(0x1F0, buf, 256);         /* 一次搬 256 个 16 位字 = 512 字节 */
+    if (ata_start(lba, 0x20) < 0) return -1;  /* READ SECTORS */
+    if (ata_drq() < 0) return -1;             /* 等数据挂上数据端口 */
+    insw(ATA_DATA, buf, SECTOR / 2);          /* 256 个 16 位字 = 512 字节 */
     return 0;
 }
 ```
 
-没有 DMA、没有中断、没有缓存——**轮询**。每一步都是查状态端口。这三十行是全书
-唯一跟真实硬件时序贴身肉搏的地方,也正因为它被关在 fs 服务里,内核对此一无所知。
+没有 DMA、没有中断、没有缓存——**轮询**。但“等”有两种等法。蛮力是原地转圈查
+状态端口;ata.c 里每次等待都在循环里插了 `halt`:中断一开,睡一拍,醒了再查。
+不 sleepy 的轮询会把 CPU 钉死整个传输期——在模拟器里,这恰好看不见宿主线程
+把命令做完,系统就真的卡住了。
+
+这一章还有个真实的战损:ATA 端口(0x1F0..)挂在 QEMU `pc` 机型的 PIIX3 上,
+而 `q35` 机型把盘接在 AHCI 后面,这些端口**悬空**——从悬空总线读回来的是
+0xFF,它的 BSY 位恰好是 1,天真的等待循环会永远等一台不存在的盘。所以每次
+等待先过一遍 `ata_dead()`:状态字节是 0xFF 就立刻报错返回,让 fs 有机会
+优雅停靠。驱动不信任总线,和 IPC 消息要检查返回值,是同一种教养。
 
 ## 一条 READ 请求的生命
 
@@ -65,11 +77,20 @@ int ata_read(u32 lba, void *buf) {
 第 4 步是文件系统唯一的“算术”:字节偏移换算成块号。学完这六步,你就理解了
 `pread` 系统调用在干什么的本质。
 
-## 写文件
+## 写文件:三段协议
 
-`FS_WRITE` 稍多一步:若 inode 未用,先找空闲 inode,再从数据区**顺序**领块
-(第 7 章的约定),把数据写进去,最后补写 inode 和超级块。注意顺序:**先写数据,
-再写 inode**——万一中途断电,最坏是留下孤儿数据块,而不是一个指向垃圾的“假文件”。
+写一条消息搞不定,fs 把它拆成三段,由 shell 依次发:
+
+```
+1. shell  SEND{FS_CREATE, data=name} ──▶ fs 领一个空 inode,回 inode 号
+2. shell  SEND{FS_WRITE, arg0=i, arg1=off, data=...} ──▶ fs 写数据块
+3. shell  SEND{FS_COMMIT, arg0=i, arg1=size} ──▶ fs 落定 inode 和超级块
+```
+
+这是**两段提交**:数据先落盘,size 最后落。万一中途断电,最坏是留下孤儿数据块
+(全零块会被重新认领,见 `alloc_block`),而不是一个指向垃圾的“假文件”。
+块分配没有位图、没有空闲链表——**全零块就是空闲块**,写过的块不再全零,
+所以永远不会被分配两次。
 
 ## 本章文件
 
