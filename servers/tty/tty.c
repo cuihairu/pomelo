@@ -5,28 +5,34 @@
 #include "tty.h"
 
 /* tty.c: the line-discipline layer. Chars arrive one IRQ at a time; the
- * shell wants whole lines. We edit, echo, and only then hand over. */
+ * shell wants whole lines. We edit, echo, and only then hand over.
+ * Completed lines queue up until the shell asks for them: a reader that
+ * lags behind must never cost the typist their keystrokes -- the same
+ * rule a real terminal's canonical mode lives by. */
+
+#define DONE_CAP 4              /* completed lines awaiting a reader */
 
 static char line[MSG_DATA];
-static int  len, line_ready;
-static struct msg pending;          /* a getline request waiting for a line */
-static int  have_pending;
+static int  len;
+static struct { char buf[DONE_CAP][MSG_DATA]; int len[DONE_CAP]; } done;
+static int done_head, done_cnt; /* ring of unclaimed lines */
+static struct msg pending;      /* a getline request waiting for a line */
+static int have_pending;
 
 static void deliver(void) {
-    if (!have_pending || !line_ready) return;
+    if (!have_pending || !done_cnt) return;
     struct msg r;
     memset(&r, 0, sizeof r);
     r.type = MSG_TTY_GETLINE;
-    r.arg0 = len;
-    memcpy(r.data, line, len);
+    r.arg0 = done.len[done_head];
+    memcpy(r.data, done.buf[done_head], done.len[done_head]);
     sys_send(pending.src, &r);
     have_pending = 0;
-    line_ready = 0;
-    len = 0;
+    done_head = (done_head + 1) % DONE_CAP;
+    done_cnt--;
 }
 
 static void handle_char(char c) {
-    if (line_ready) return;     /* one unclaimed line: ignore new input */
     if (c == '\b') {
         if (len) {
             len--;
@@ -34,8 +40,13 @@ static void handle_char(char c) {
         }
     } else if (c == '\n') {
         tty_putc('\n');
-        line[len] = 0;
-        line_ready = 1;
+        if (done_cnt < DONE_CAP) {      /* claim it or drop the newline */
+            int tail = (done_head + done_cnt) % DONE_CAP;
+            done.len[tail] = len;
+            memcpy(done.buf[tail], line, len);
+            done_cnt++;
+        }
+        len = 0;
         deliver();
     } else if ((u8)c >= 32 && len < (int)sizeof(line) - 1) {
         line[len++] = c;
