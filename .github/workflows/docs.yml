@@ -32,6 +32,8 @@ jobs:
           cache-dependency-path: docs/pnpm-lock.yaml
       - name: install
         working-directory: docs
+        env:
+          PNPM_DANGEROUSLY_ALLOW_ALL_BUILDS: "true"
         run: pnpm install --frozen-lockfile --config.minimum-release-age=0
       - name: build
         working-directory: docs
