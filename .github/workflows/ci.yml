@@ -1,0 +1,35 @@
+# Push/PR gate: build the image and boot it once in QEMU.
+# The nightly workflow (nightly.yml) goes further: both machines,
+# screenshots, a rolling release. This one answers one question only —
+# does today's main still build and boot?
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install qemu
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86
+
+      - name: build
+        run: |
+          cmake -S . -B build
+          cmake --build build -j
+
+      - name: boot in qemu
+        working-directory: build
+        run: ctest --output-on-failure
