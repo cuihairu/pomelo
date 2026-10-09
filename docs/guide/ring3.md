@@ -1,13 +1,14 @@
 # 14 · 真隔离:ring3
 
-对应代码:`boot/gdt.c`、`kernel/sched/`、`kernel/mm/paging.c`、`apps/probe/`
+对应代码:`boot/gdt.c`、`kernel/sched/`、`kernel/mm/paging.c`、`kernel/char.c`、`apps/probe/`
 
 ## shell 搬进了自己的地址空间
 
 [上一章](/guide/paging)把分页机制立了起来:低 16 MB 恒等映射,内核专属。本章
-把 shell 搬出这半边世界——它从此跑在 ring 3、自己的页目录里,和内核之间隔着
+把任务搬出这半边世界——它从此跑在 ring 3、自己的页目录里,和内核之间隔着
 一堵 CPU 亲自把守的墙。shell 的代码一行没改:它本来就只发消息。这是微内核
-结构投资的回报,当初守规矩,如今升级免费。
+结构投资的回报,当初守规矩,如今升级免费——而且这笔红利最后连 fs 和 tty
+也领到了(见章末)。
 
 ## 用户程序是一段链接在 0x40000000 的二进制
 
@@ -42,13 +43,13 @@ CPU 自动切过来的内核栈。每任务一个内核栈,TSS 里只放当前�
 
 ## 出生即 ring 3
 
-`task_spawn_user`(kernel/sched/sched.c)给新任务铺的不是普通栈,而是一副
-完整的 iret 帧:
+内核里已经没有"ring 0 任务"这回事了:`task_spawn_user`(kernel/sched/sched.c)
+给每个新任务铺的不是普通栈,而是一副完整的 iret 帧:
 
 ```c
 *--sp = USER_DS;              /* ss: the frame iret walks bottom-up */
 *--sp = ustack_top;           /* user esp */
-*--sp = 0x202;                /* eflags: interrupts on */
+*--sp = flags;                /* eflags: EFLAGS_USER, maybe + IOPL */
 *--sp = USER_CS;              /* user cs */
 *--sp = entry;                /* user eip */
 *--sp = (u32)ring3_entry;     /* switch_to's ret target */
@@ -123,24 +124,43 @@ static void task_fault(struct regs *r, const char *what, u32 addr) {
 内核页错误 = 内核 bug = 停机;用户页错误 = 一个任务作死 = 杀一个,其他人
 无恙。`sched_next` 转身就调度别的任务,死任务的栈永远不会被续上。
 
-## 还差的一步
+## 最后一步:服务也搬了进来
 
-诚实地说,隔离只兑现了一半:shell 和 probe 住进了各自的地址空间,但 fs、tty
-还是 ring 0 的内核任务,和内核共享低 16 MB;IPC 的消息也是内核替两边直接
-读写队列,还没有跨地址空间拷贝。补齐这两件事——**每服务独立页表 + IPC 内核
-拷贝**——就是把 [第 1 章](/guide/intro)的升级清单全数清账,留在路线图上。
+shell 示范之后,这套机制马上铺给了所有任务,四个程序现在全是 ring 3 的 blob,
+各住一个地址空间。有两笔账值得单独记:
+
+**控制台硬件收归内核**(`kernel/char.c`)。中断函数跑在"当时正好在 CPU 上的
+那份地址空间"里——fs 的页目录里没有 tty 的代码,反过来说,给 tty 处理键盘的
+ISR 若还住在 tty 里,撞上 fs 在跑的那一拍就是一次页错误。所以碰端口、认 IRQ
+的那一小块(键盘解码 + 串口)只能搬进所有地址空间共有的内核,把字符变成
+`TTY_CHAR` 消息投给 tty;输出则反过来,内核给所有任务开一个 `sys_write`。
+服务从此一个端口都不碰。
+
+**fs 的猫洞:IOPL=3**。磁盘驱动和文件服务住在一起,这个设计从第 1 章守到现在;
+但 ata.c 的 `in`/`out` 在 ring 3 默认是禁令。x86 的钥匙是 eflags 里的 IOPL:
+内核只给 fs 一家的出生 eflags 置 `IOPL=3`(`EFLAGS_USER_IOPL`),别的任务
+照样一枚端口都摸不到。
+
+至于清单上最后一项——IPC 内核拷贝——其实第一天就写对了:消息从来都是内核
+把发件人的 `*m` 抄进自己的队列、再抄给收件人(`kernel/ipc/ipc.c` 的
+`enqueue`)。过去两边共享地址空间,这次拷贝看着多余;如今发件人和收件人
+隔着各自的页目录,同一行代码干的就是"跨地址空间传消息"。结构守住了,机制
+补上时一行 IPC 都没改。
+
+[第 1 章](/guide/intro)的升级清单,到此全数清账。
 
 ## 本章文件
 
 ```
 boot/gdt.c/.h           ring 3 段、TSS、esp0
 tools/user.ld           用户链接脚本(.hdr 入口 + .bss 折叠)
-kernel/sched/sched.c    task_spawn_user 的 iret 帧、cr3/esp0 切换
+kernel/sched/sched.c    task_spawn_user 的 iret 帧、eflags/IOPL、cr3/esp0 切换
 kernel/sched/switch.S   ring3_entry
 kernel/mm/paging.c      pdir_user_new:每任务一份世界
+kernel/char.c           控制台硬件收编:中断变消息,输出变系统调用
 apps/probe/probe.c      开机撞墙演示
 ```
 
-本章之后没有新章节了。想把[第 1 章](/guide/intro)升级清单上的最后两项
-(每服务独立页表、IPC 内核拷贝)做掉,从[构建与运行](/guide/build-and-run)
-把机器跑起来改起。
+本章之后没有新章节了。机器已经整台住进 ring 3,从[构建与运行](/guide/build-and-run)
+把它跑起来,然后随便挑一处改:加一条消息类型、给某个服务再开一个猫洞、
+或者把 fs 搬回内核体会一下代价——墙是为你砌的,拆着玩才知道它结实。

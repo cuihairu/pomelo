@@ -1,4 +1,4 @@
 # todo
 
 - deps (rechecked 2026-10-10): vitepress latest is still 1.6.4 (2.x = 2.0.0-alpha.20); the 4 npm advisories in docs (vite ×3 — one high, one moderate + esbuild moderate) stay blocked on the 2.x stable, patched in vite ≥6.4.3 / esbuild ≥0.25.0.
-- mmu (decided 2026-10-10, user approved): implement the beyond-mmu sketch steps 2-3 this batch — frame allocator, kernel page tables with paging on, shell and a fault probe running at ring3. Step 4 (ipc kernel copy + per-service page tables) remains the roadmap.
+- mmu: steps 1-3 done 2026-10-10 (frame allocator, paging on, ring3 shell + probe). Step 4 done 2026-10-10: kernel owns console hardware (kernel/char.c, input becomes TTY_CHAR messages, output via SYS_WRITE/SYS_CLEAR); fs and tty are ring3 blobs in their own address spaces (fs spawns with EFLAGS_USER_IOPL for the ata driver, waits now use sys_yield since hlt is ring0-only); IPC kernel copy was already in place and is now cross-address space. The intro upgrade checklist is fully cleared; guide chapters 08/09/14/01/03/04/06 synced with the code.

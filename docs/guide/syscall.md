@@ -7,12 +7,12 @@
 用户态任务想发消息、想阻塞、想重启机器,都必须请内核代办——因为这些事都需要
 **内核特权**:写任务表、碰队列、访问硬件。请求内核的通道就是系统调用。
 
-在真微内核里,这条通道由 CPU 特权级 + 跳转门硬件保证。Pomelo 的服务任务早年
-全在 ring0,但**接口**从第一天就照做:一个软中断门 `int 0x80`,把“进内核”这
-件事形式化下来。[第 14 章](/guide/ring3)shell 搬进 ring 3 时,这扇门加上
-`DPL=3` 就成了用户到内核的唯一通道——接口没改,只是门上挂了锁。
+在真微内核里,这条通道由 CPU 特权级 + 跳转门硬件保证。Pomelo 的服务任务
+早年全在 ring0,但**接口**从第一天就照做:一个软中断门 `int 0x80`,把“进
+内核”这件事形式化下来。[第 14 章](/guide/ring3)任务搬进 ring 3 时,这扇门
+加上 `DPL=3` 就成了用户到内核的唯一通道——接口没改,只是门上挂了锁。
 
-## 一张五行的分发表
+## 一张七行的分发表
 
 ```c
 enum {
@@ -21,6 +21,8 @@ enum {
     SYS_RECV    = 2,   /* 接收消息(可能阻塞) */
     SYS_IRQ_WAIT= 3,   /* 等待某个 IRQ */
     SYS_REBOOT  = 4,   /* 重启 */
+    SYS_WRITE   = 5,   /* ebx=buf, ecx=len: 控制台输出,内核侧 */
+    SYS_CLEAR   = 6,   /* 清屏 */
 };
 ```
 
@@ -45,6 +47,15 @@ void syscall_entry(struct regs *r) {
         return;
     case SYS_REBOOT:
         reboot_now();                 /* 往 0x64 口打一拍,重启 */
+        return;
+    case SYS_WRITE:
+        con_write((const char *)r->ebx, r->ecx);   /* 控制台归内核管 */
+        r->eax = 0;
+        return;
+    case SYS_CLEAR:
+        con_clear();
+        r->eax = 0;
+        return;
     }
     r->eax = -1;                      /* 没这个号 */
 }
@@ -71,9 +82,11 @@ static inline int sys_send(int dst, struct msg *m) {
 
 ## 一扇门,而不是一堆函数
 
-值得强调:Pomelo 的服务和内核之间**只有这五个调用**。读文件、打印、按键,统统
-不经过系统调用,而是服务与服务之间的消息(走 `SYS_SEND`/`SYS_RECV`)。系统调用
-表越小,内核越小;内核越小,越接近微内核的本来面目。
+值得强调:Pomelo 的任务和内核之间**只有这七个调用**。读文件、按键,统统
+不经过系统调用,而是服务与服务之间的消息(走 `SYS_SEND`/`SYS_RECV`);
+`SYS_WRITE`/`SYS_CLEAR` 是仅有的例外——屏幕归内核管,任务想说话只有这一个
+出口(缘由见[第 14 章](/guide/ring3))。系统调用表越小,内核越小;内核越小,
+越接近微内核的本来面目。
 
 ## 本章文件
 

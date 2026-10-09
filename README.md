@@ -5,8 +5,9 @@
 Pomelo is a teaching kernel for the i386, built as a **logical microkernel**: the
 kernel only does five things (interrupt dispatch, scheduling, IPC, a syscall
 gate, paging). Everything else — the file system, the terminal, the shell — runs
-as separate tasks on top of message passing, and the shell lives in its own
-ring 3 address space. It boots straight from QEMU with no bootloader to install.
+as separate tasks on top of message passing, and every one of them lives in its
+own ring 3 address space. It boots straight from QEMU with no bootloader to
+install.
 
 [![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 
@@ -51,15 +52,18 @@ screenshot with its [release](https://github.com/cuihairu/pomelo/releases/tag/ni
 Each directory is one concept, and the book follows the same order. The split
 is the point: `kernel/` holds only the five mechanisms every task must pass
 through, `servers/` holds the user-space services, and apps reach them purely
-by passing messages. The kernel never parses a disk format and never touches
-a keyboard; the file system lives outside it so that a disk bug has to get
-through IPC before it can hurt anyone.
+by passing messages. The kernel never parses a disk format; the file system
+lives outside it so that a disk bug has to get through IPC before it can hurt
+anyone. The one piece of hardware the kernel does own is the console: the
+keyboard and serial interrupts land in `kernel/char.c`, which turns each
+character into a message for the tty service — output is one syscall away.
 
 ```
 boot/       From power-on to the first line of C: multiboot, GDT, IDT, PIT.
-kernel/     The microkernel: interrupts, scheduling, IPC, syscalls, paging.
+kernel/     The microkernel: interrupts, scheduling, IPC, syscalls, paging,
+            plus the console hardware (char.c) that feeds the tty service.
 servers/fs/ A file server and its tiny on-disk format (superblock + inodes).
-servers/tty/ A terminal server: keyboard scancodes to a line buffer.
+servers/tty/ A terminal server: kernel-delivered chars to a line buffer.
 apps/shell/ A REPL that talks to the services over IPC (runs at ring 3).
 tools/mkfs/ The host tool that lays out the disk image.
 docs/       The book (VitePress), one chapter per directory above.

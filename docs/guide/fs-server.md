@@ -4,20 +4,21 @@
 
 ## 文件系统变成了一个“收发消息的程序”
 
-上一章的格式只是磁盘上的字节排布,真正让它活起来的是 fs 服务——一个普通的任务,
-循环做一件事:收请求,查 inode,读写块,回消息。
+上一章的格式只是磁盘上的字节排布,真正让它活起来的是 fs 服务——一个普通的
+ring 3 任务(和 shell 一样是嵌进内核镜像的 blob,住自己的地址空间),循环做
+一件事:收请求,查 inode,读写块,回消息。
 
 ```c
 void fs_main(void) {
+    struct msg m;                 /* also the forever-park mailbox below */
     if (ata_read(0, &sb) < 0) {
-        kprintf("fs: no disk behind the ata ports, staying idle\n");
-        for (;;) halt();          /* park this task; the rest lives on */
+        con_puts("fs: no disk behind the ata ports, staying idle\n");
+        for (;;) sys_recv(&m);    /* park: block forever, costs nothing */
     }
     if (sb.magic != FS_MAGIC) {
-        kprintf("fs: bad disk (magic=%x), staying idle\n", sb.magic);
-        for (;;) halt();
+        con_puts("fs: bad disk magic, staying idle\n");
+        for (;;) sys_recv(&m);
     }
-    struct msg m;
     for (;;) {
         sys_recv(&m);
         switch (m.type) {
@@ -32,9 +33,11 @@ void fs_main(void) {
 }
 ```
 
-“躺平”是有讲究的:fs 只 `halt` 停下自己这一个任务,内核和其余服务照常活着。
-用户敲 `ls` 会得不到回音,但 shell 没死、tty 没死——故障被关在一个服务里,
-这正是把文件系统放内核外面买到的保险。
+“躺平”是有讲究的:fs 只把自己的状态搁成 `BLOCKED` 阻塞在 `sys_recv` 上,
+不再消耗一丝 CPU;内核和其余服务照常活着。用户敲 `ls` 会得不到回音,但
+shell 没死、tty 没死——故障被关在一个服务里,这正是把文件系统放内核外面
+买到的保险。(`con_puts` 来自 `apps/con.h`:ring 3 的程序想说话,只有
+`sys_write` 这一条路。)
 
 一眼望去像个网络服务器——事实上它就是。微内核里的“系统服务”和分布式系统里的
 “服务”在结构上没有区别,这正是微内核教学的价值。
@@ -53,15 +56,23 @@ int ata_read(u32 lba, void *buf) {
 ```
 
 没有 DMA、没有中断、没有缓存——**轮询**。但“等”有两种等法。蛮力是原地转圈查
-状态端口;ata.c 里每次等待都在循环里插了 `halt`:中断一开,睡一拍,醒了再查。
-不 sleepy 的轮询会把 CPU 钉死整个传输期——在模拟器里,这恰好看不见宿主线程
-把命令做完,系统就真的卡住了。
+状态端口;ata.c 里每次等待都在循环里插了 `sys_yield()`:把 CPU 让给下一个任务,
+轮到自己再查。不谦让的轮询会把 CPU 钉死整个传输期——在模拟器里,这恰好看不见
+宿主线程把命令做完,系统就真的卡住了。(经典写法是 `hlt` 小睡,但 hlt 是
+ring 0 专属指令;到了 ring 3,礼貌的做法就是交还调度器。)
 
 这一章还有个真实的战损:ATA 端口(0x1F0..)挂在 QEMU `pc` 机型的 PIIX3 上,
 而 `q35` 机型把盘接在 AHCI 后面,这些端口**悬空**——从悬空总线读回来的是
 0xFF,它的 BSY 位恰好是 1,天真的等待循环会永远等一台不存在的盘。所以每次
 等待先过一遍 `ata_dead()`:状态字节是 0xFF 就立刻报错返回,让 fs 有机会
 优雅停靠。驱动不信任总线,和 IPC 消息要检查返回值,是同一种教养。
+
+还有一道只属于本章的门缝:驱动如今跑在 ring 3,`in`/`out` 这类端口指令在
+这个特权级默认是禁令。x86 给的钥匙叫 **IOPL**:eflags 里的两位,`IOPL >= CPL`
+时放行端口指令。内核只给 fs 这一家的出生 eflags 置了 `IOPL=3`(`EFLAGS_USER_IOPL`,
+kernel/sched/sched.h)——磁盘驱动和文件服务住在一起,是我们从第 1 章守到现在的
+设计;IOPL 就是这堵墙上专门为它开的猫洞:一条指令都多给不了,别的任务照样
+摸不到端口。
 
 ## 一条 READ 请求的生命
 
