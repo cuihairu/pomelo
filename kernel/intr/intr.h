@@ -12,16 +12,20 @@ struct regs {
     u32 eip, cs, eflags;                         /* pushed by CPU */
 };
 
-#define IRQ0 0   /* PIT */
-#define IRQ1 1   /* keyboard */
+#define IRQ_PIT   0   /* timer */
+#define IRQ_KBD   1   /* PS/2 keyboard */
+#define IRQ_COM1  4   /* serial port receive */
 
 void idt_init(void);
 void pic_remap(void);
 void pic_eoi(u32 irq);
+void pit_init(u32 hz);
 
 void intr_dispatch(struct regs *r);
+void panic(const char *why, struct regs *r);
 void irq_install(u32 irq, void (*fn)(void));
+void irq_dispatch(u32 irq);/* run a line's handler, if owned */
 void irq_raise(u32 irq);   /* called from intr_dispatch */
-void irq_wait(u32 irq);    /* block the current task until irq fires */
+void irq_wait(u32 mask);   /* block until any irq in the mask fires */
 
 #endif

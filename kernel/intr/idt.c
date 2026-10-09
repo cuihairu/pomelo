@@ -12,7 +12,8 @@ struct idt_entry {
 
 static struct idt_entry idt[256];
 
-static struct {
+/* Referenced by name from stubs.S. */
+struct {
     u16 limit;
     u32 base;
 } __attribute__((packed)) idt_ptr;
@@ -28,23 +29,25 @@ void idt_set(int n, u32 handler, u16 sel, u8 flags) {
     idt[n].offset_hi = handler >> 16;
 }
 
-/* Defined in stubs.S: one tiny wrapper per vector. */
-void intr_stub_0(void);
-void intr_stub_1(void);
-void intr_stub_128(void);
+/* Defined in stubs.S: one tiny wrapper per vector we actually use. */
+void intr_stub_exc(void);
+void intr_stub_32(void);      /* IRQ_PIT */
+void intr_stub_33(void);      /* IRQ_KBD */
+void intr_stub_36(void);      /* IRQ_COM1 */
+void intr_stub_128(void);     /* the syscall gate */
 
 void idt_init(void) {
     for (int i = 0; i < 256; i++)
         idt_set(i, 0, 0, 0);          /* not-present by default */
 
-    /* CPU exceptions we care to catch (vector == exception number). */
-    extern void intr_stub_exc(void);
+    /* CPU exceptions share one stub: we do not decode them, we stop. */
     for (int i = 0; i < 32; i++)
         idt_set(i, (u32)intr_stub_exc, 0x08, 0x8E);
 
     /* Hardware IRQs live at 32..47 after the PIC remap. */
-    idt_set(32 + IRQ0, (u32)intr_stub_0,   0x08, 0x8E);  /* timer */
-    idt_set(32 + IRQ1, (u32)intr_stub_1,   0x08, 0x8E);  /* keyboard */
+    idt_set(32 + IRQ_PIT,  (u32)intr_stub_32,  0x08, 0x8E);
+    idt_set(32 + IRQ_KBD,  (u32)intr_stub_33,  0x08, 0x8E);
+    idt_set(32 + IRQ_COM1, (u32)intr_stub_36,  0x08, 0x8E);
 
     /* The syscall gate. */
     idt_set(0x80, (u32)intr_stub_128, 0x08, 0x8E);
