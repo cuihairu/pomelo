@@ -38,7 +38,8 @@ export default defineConfig({
         text: '收尾',
         items: [
           { text: '11 · 构建与运行', link: '/guide/build-and-run' },
-          { text: '12 · 扩展:MMU 与真隔离', link: '/guide/beyond-mmu' }
+          { text: '13 · 分页上线', link: '/guide/paging' },
+          { text: '14 · 真隔离:ring3', link: '/guide/ring3' }
         ]
       }
     ],

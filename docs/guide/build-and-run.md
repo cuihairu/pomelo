@@ -120,4 +120,4 @@ tools/mkiso.sh        把内核打成 BIOS 可引导的 ISO(grub multiboot)
 boot/kernel.ld        链接脚本
 ```
 
-下一章:[扩展:MMU 与真隔离](/guide/beyond-mmu)。
+下一章:[分页上线](/guide/paging)。

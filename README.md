@@ -3,10 +3,10 @@
 > A microkernel written from scratch in C — small enough to read in one sitting.
 
 Pomelo is a teaching kernel for the i386, built as a **logical microkernel**: the
-kernel only does four things (interrupt dispatch, scheduling, IPC, a syscall
-gate). Everything else — the file system, the terminal, the shell — runs as
-separate tasks on top of message passing. It boots straight from QEMU with no
-bootloader to install.
+kernel only does five things (interrupt dispatch, scheduling, IPC, a syscall
+gate, paging). Everything else — the file system, the terminal, the shell — runs
+as separate tasks on top of message passing, and the shell lives in its own
+ring 3 address space. It boots straight from QEMU with no bootloader to install.
 
 [![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 
@@ -49,7 +49,7 @@ screenshot with its [release](https://github.com/cuihairu/pomelo/releases/tag/ni
 ## Layout
 
 Each directory is one concept, and the book follows the same order. The split
-is the point: `kernel/` holds only the four mechanisms every task must pass
+is the point: `kernel/` holds only the five mechanisms every task must pass
 through, `servers/` holds the user-space services, and apps reach them purely
 by passing messages. The kernel never parses a disk format and never touches
 a keyboard; the file system lives outside it so that a disk bug has to get
@@ -57,10 +57,10 @@ through IPC before it can hurt anyone.
 
 ```
 boot/       From power-on to the first line of C: multiboot, GDT, IDT, PIT.
-kernel/     The microkernel: interrupts, scheduling, IPC, syscalls. Nothing else.
+kernel/     The microkernel: interrupts, scheduling, IPC, syscalls, paging.
 servers/fs/ A file server and its tiny on-disk format (superblock + inodes).
 servers/tty/ A terminal server: keyboard scancodes to a line buffer.
-apps/shell/ A REPL that talks to the services over IPC.
+apps/shell/ A REPL that talks to the services over IPC (runs at ring 3).
 tools/mkfs/ The host tool that lays out the disk image.
 docs/       The book (VitePress), one chapter per directory above.
 ```
