@@ -6,6 +6,8 @@ Pomelo 是一个 i386 平台的教学内核,一个**逻辑微内核**:内核只�
 (中断分发、调度、IPC、系统调用门)。除此之外的一切——文件系统、终端、shell——
 都是跑在消息传递之上的独立任务。它用 QEMU 直接启动,不需要安装引导器。
 
+[![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+
 [English](README.md)
 
 ## 快速开始
@@ -14,6 +16,31 @@ Pomelo 是一个 i386 平台的教学内核,一个**逻辑微内核**:内核只�
 cmake -B build && cmake --build build
 ctest --test-dir build          # 在 QEMU 中启动,校验启动横幅
 ```
+
+## 本地跑起来
+
+QEMU 是唯一的运行依赖:
+
+| 平台 | 安装 |
+| --- | --- |
+| Ubuntu / Debian | `sudo apt install qemu-system-x86 qemu-utils` |
+| Fedora / CentOS | `sudo dnf install qemu-system-x86` |
+| macOS | `brew install qemu` |
+| Windows | `winget install qemu` |
+
+`qemu-system-i386 --version` 确认装好,然后选一种模式:
+
+```sh
+# 串口模式:shell 就在你的终端里(退出:先按 Ctrl+A,再按 X)
+qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img -nographic
+
+# 显示模式:开一个真窗口,键盘走模拟 PS/2
+qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
+```
+
+`-M pc` 不是可有可无:默认的 `q35` 机型把盘挂在 AHCI 后面,这块 ATA 驱动够不着,
+fs 服务会打印一行提示然后停在原地。[nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+每天把两种机型各真跑一遍,串口记录和启动截图都挂在 [nightly release](https://github.com/cuihairu/pomelo/releases/tag/nightly) 里。
 
 ## 目录
 

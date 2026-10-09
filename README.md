@@ -8,6 +8,8 @@ gate). Everything else — the file system, the terminal, the shell — runs as
 separate tasks on top of message passing. It boots straight from QEMU with no
 bootloader to install.
 
+[![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+
 [中文说明](README.zh.md)
 
 ## Quick start
@@ -16,6 +18,33 @@ bootloader to install.
 cmake -B build && cmake --build build
 ctest --test-dir build          # boots in QEMU, verifies the banner
 ```
+
+## Run it locally
+
+QEMU is the only runtime dependency:
+
+| OS | install |
+| --- | --- |
+| Ubuntu / Debian | `sudo apt install qemu-system-x86 qemu-utils` |
+| Fedora / CentOS | `sudo dnf install qemu-system-x86` |
+| macOS | `brew install qemu` |
+| Windows | `winget install qemu` |
+
+Confirm with `qemu-system-i386 --version`, then pick a mode:
+
+```sh
+# serial mode: the shell lands in your terminal (quit: Ctrl+A, then X)
+qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img -nographic
+
+# display mode: a real window, keyboard input via the emulated PS/2
+qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
+```
+
+`-M pc` is not decoration: the default `q35` machine wires its disk through
+AHCI, out of reach of this ATA driver — the fs server prints a note and
+parks. The [nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+boots both machines every day and ships the serial log and a boot
+screenshot with its [release](https://github.com/cuihairu/pomelo/releases/tag/nightly).
 
 ## Layout
 
