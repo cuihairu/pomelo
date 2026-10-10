@@ -21,11 +21,19 @@
 #define USER_BASE       0x40000000u
 #define USER_STACK_TOP  0x40200000u
 
+/* Device memory window: mmio_map hands out addresses here, one page per
+ * distinct physical page. PCI MMIO lives near the top of the 32-bit
+ * space, far above the identity-mapped 16 MB, so a driver reaches its
+ * card only through this window. */
+#define MMIO_BASE       0x40800000u
+
 extern u32 kernel_pdir[1024];            /* the boot directory, ring 0 only */
 
 void paging_init(void);                  /* build the map, flip CR0.PG */
 void load_cr3(u32 pa);                   /* switch address spaces */
 u32  cr2_fault(void);                    /* faulting address, for the handler */
+u32  v2p(u32 va);                        /* one walk of the current task's map */
+u32  mmio_map(u32 pa);                   /* map one device page, return va */
 u32  pdir_user_new(u32 blob_pa, u32 bytes);  /* dir for a user image */
 
 #endif

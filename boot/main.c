@@ -14,6 +14,7 @@ extern const u8 _binary_ufs_bin_start[],    _binary_ufs_bin_end[];
 extern const u8 _binary_utty_bin_start[],   _binary_utty_bin_end[];
 extern const u8 _binary_ushell_bin_start[], _binary_ushell_bin_end[];
 extern const u8 _binary_uprobe_bin_start[], _binary_uprobe_bin_end[];
+extern const u8 _binary_unet_bin_start[],   _binary_unet_bin_end[];
 
 static void servers_start(void) {
     sched_init();
@@ -25,11 +26,14 @@ static void servers_start(void) {
              EFLAGS_USER);
     prog_add("probe", _binary_uprobe_bin_start, _binary_uprobe_bin_end,
              EFLAGS_USER);          /* born to crash, revivable by hand */
+    prog_add("net",   _binary_unet_bin_start,   _binary_unet_bin_end,
+             EFLAGS_USER_IOPL);     /* pci config + e1000 mmio need ports */
 
     sched_spawn("fs");              /* spawn order fixes the task ids */
     sched_spawn("tty");
     sched_spawn("shell");
     sched_spawn("probe");
+    sched_spawn("net");
 }
 
 void kmain(u32 magic, u32 info) {

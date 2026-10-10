@@ -15,6 +15,8 @@ rm -f "$out/monitor.sock" "$out/vga.bin" "$out/vga.txt"
 # own session: the group kill below takes out timeout AND qemu
 setsid timeout 60 "$qemu" -kernel "$kernel" -hda "$img" \
     -display none -serial null -no-reboot \
+    -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0 \
+    -object filter-dump,id=f0,netdev=n0,file="$out/net.pcap" \
     -monitor unix:"$out/monitor.sock",server,nowait > "$out/qemu.log" 2>&1 &
 QPID=$!
 

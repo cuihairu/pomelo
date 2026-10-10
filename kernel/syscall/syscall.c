@@ -1,9 +1,14 @@
 #include "syscall.h"
 #include "../char.h"
 #include "../intr/intr.h"
+#include "../mm/paging.h"
 #include "../sched/sched.h"
 
 /* Everything the kernel will ever do for a task, on one page. */
+
+/* The net driver's wake stub: does nothing itself -- irq_raise does the
+ * waking -- it only gives the line an owner so empty lines stay masked. */
+void net_irq_stub(void) { }
 
 static void reboot_now(void) {
     intr_disable();
@@ -52,6 +57,21 @@ void syscall_entry(struct regs *r) {
     case SYS_MEM:
         frame_stats((struct mem_info *)r->ebx);
         r->eax = 0;
+        return;
+    case SYS_IRQ_ENABLE:
+        /* The pic mask and the idt are kernel territory; the driver that
+         * owns the line asks here. The stub is empty by design: waking
+         * the waiter is irq.c's job, and the driver clears the device's
+         * own interrupt state once it runs. */
+        pic_irq_enable(r->ebx);
+        irq_install(r->ebx, net_irq_stub);
+        r->eax = 0;
+        return;
+    case SYS_V2P:
+        r->eax = v2p(r->ebx);
+        return;
+    case SYS_MMIO:
+        r->eax = mmio_map(r->ebx);
         return;
     }
     r->eax = -1;                      /* unknown syscall number */

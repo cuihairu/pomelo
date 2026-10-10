@@ -9,6 +9,9 @@
 # usage: smoke.sh <qemu> <kernel> <image> <output-log>
 
 qemu="$1"; kernel="$2"; img="$3"; out="$4"
+pcap=$(dirname "$out")/net.pcap
+netargs="-netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0
+-object filter-dump,id=f0,netdev=n0,file=$pcap"
 
 { sleep 2; printf '\n'
   sleep 1; printf 'help\n'
@@ -20,7 +23,7 @@ qemu="$1"; kernel="$2"; img="$3"; out="$4"
   sleep 1; printf 'echo hello pomelo\n'
   sleep 1; printf 'mem\n'
   sleep 2; } | timeout 20 "$qemu" -kernel "$kernel" -hda "$img" \
-      -serial stdio -display none -no-reboot > "$out" 2>&1
+      -serial stdio -display none -no-reboot $netargs > "$out" 2>&1
 
 grep -q 'hello from the pomelo disk' "$out"
 grep -q 'hello pomelo' "$out"

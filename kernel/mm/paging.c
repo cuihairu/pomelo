@@ -1,6 +1,7 @@
 #include "paging.h"
 #include "frame.h"
 #include "../string.h"
+#include "../sched/sched.h"
 
 /* The kernel's own page directory: identity map of the low 16 MB,
  * supervisor-only, read-write. Identity is the honest first step — every
@@ -33,6 +34,38 @@ u32 cr2_fault(void) {
     u32 addr;
     __asm__ volatile("movl %%cr2, %0" : "=r"(addr));
     return addr;
+}
+
+/* Virtual to physical, one page-table walk, for the caller's own space.
+ * DMA descriptors (the e1000) want machine addresses, but a ring 3 task
+ * only ever sees its translation -- asking the kernel is the honest way
+ * to get one. Returns 0 when the mapping is not present. */
+u32 v2p(u32 va) {
+    u32 *de = (u32 *)tasks[cur].pdir;            /* pa == va below 16 MB */
+    if (!de || !(de[va >> 22] & PTE_P)) return 0;
+    u32 *te = (u32 *)(de[va >> 22] & ~0xFFFu);
+    u32 e = te[(va >> 12) & 0x3FF];
+    if (!(e & PTE_P)) return 0;
+    return (e & ~0xFFFu) | (va & 0xFFFu);
+}
+
+/* Map one page of device memory into the caller's space. The physical
+ * page number picks the slot in the MMIO window, so the same page always
+ * lands at the same address and remapping is idempotent. (Real hardware
+ * would also want the mapping uncacheable; this machine runs without a
+ * cache, which is one cheat the emulator lets us keep.) */
+u32 mmio_map(u32 pa) {
+    u32 va = MMIO_BASE + ((pa >> 12) & 0x3FF) * 4096;
+    u32 *de = (u32 *)tasks[cur].pdir;
+    if (!(de[va >> 22] & PTE_P)) {
+        u32 pt = frame_alloc();
+        if (!pt) return 0;
+        memset((void *)pt, 0, 4096);
+        de[va >> 22] = pt | PTE_P | PTE_RW | PTE_US;
+    }
+    u32 *te = (u32 *)(de[va >> 22] & ~0xFFFu);
+    te[(va >> 12) & 0x3FF] = (pa & ~0xFFFu) | PTE_P | PTE_RW | PTE_US;
+    return va;
 }
 
 /* A page directory for one user image. The kernel PDEs are shared, so

@@ -4,6 +4,7 @@
 typedef unsigned char      u8;
 typedef unsigned short     u16;
 typedef unsigned int       u32;
+typedef unsigned long long u64;
 typedef signed int         i32;
 
 #define NULL ((void *)0)
@@ -23,6 +24,14 @@ static inline void outw(u16 port, u16 val) {
 static inline u16 inw(u16 port) {
     u16 v;
     __asm__ volatile("inw %1, %0" : "=a"(v) : "Nd"(port));
+    return v;
+}
+static inline void outl(u16 port, u32 val) {
+    __asm__ volatile("outl %0, %1" :: "a"(val), "Nd"(port));
+}
+static inline u32 inl(u16 port) {
+    u32 v;
+    __asm__ volatile("inl %1, %0" : "=a"(v) : "Nd"(port));
     return v;
 }
 

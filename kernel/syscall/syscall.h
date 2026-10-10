@@ -11,6 +11,7 @@
 #define TID_TTY    2
 #define TID_SHELL  3
 #define TID_PROBE  4
+#define TID_NET    5
 
 enum {
     SYS_YIELD    = 0,   /* give up the rest of this time slice */
@@ -24,6 +25,9 @@ enum {
     SYS_PS       = 8,   /* ebx=buf, ecx=max: task-table snapshot */
     SYS_UPTIME   = 9,   /* seconds since boot: the heartbeat, read back */
     SYS_MEM      = 10,  /* ebx=&mem_info: the frame bitmap, counted */
+    SYS_IRQ_ENABLE = 11, /* ebx=irq: open the pic line, park a wake stub */
+    SYS_V2P      = 12,  /* ebx=va: virtual to physical, for DMA descriptors */
+    SYS_MMIO     = 13,  /* ebx=pa: map one device page, returns its va */
 };
 
 struct regs;                       /* kernel/intr/intr.h */
@@ -48,6 +52,9 @@ static inline int  sys_spawn(const char *name)      { return gate(SYS_SPAWN, (in
 static inline int  sys_ps(struct ps_entry *b, int n){ return gate(SYS_PS, (int)b, n); }
 static inline u32  sys_uptime(void)                 { return gate(SYS_UPTIME, 0, 0); }
 static inline void sys_mem(struct mem_info *m)      { (void)gate(SYS_MEM, (int)m, 0); }
+static inline void sys_irq_enable(int irq)          { (void)gate(SYS_IRQ_ENABLE, irq, 0); }
+static inline u32  sys_v2p(u32 va)                  { return gate(SYS_V2P, (int)va, 0); }
+static inline u32  sys_mmio(u32 pa)                 { return gate(SYS_MMIO, (int)pa, 0); }
 
 /* sys_send reports a full queue instead of waiting; a caller that must
  * not lose the message retries -- a request dropped is a reply you

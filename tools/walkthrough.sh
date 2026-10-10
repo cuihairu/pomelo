@@ -20,6 +20,7 @@
 # transcript and grades on shell checks alone, same as the nightly ruling.
 
 qemu="$1"; kernel="$2"; img="$3"; out="$4"; shift 4
+pcap=$(dirname "$out")/net.pcap
 
 pacing() {
     sleep 2; printf '\n'
@@ -38,7 +39,9 @@ pacing() {
 }
 
 { pacing; } | timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
-    -nographic -no-reboot "$@" > "$out" 2>&1
+    -nographic -no-reboot "$@" \
+    -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0 \
+    -object filter-dump,id=f0,netdev=n0,file="$pcap" > "$out" 2>&1
 
 fail=0
 check() { grep -Eq "$2" "$out" || { echo "FAIL: $1"; fail=1; }; }

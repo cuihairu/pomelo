@@ -44,6 +44,7 @@ pomelo_user(uprobe apps/probe/probe.c kernel/string.c)
 pomelo_user(ufs  servers/fs/fs.c servers/fs/fsrw.c servers/fs/ata.c
     kernel/string.c)
 pomelo_user(utty servers/tty/tty.c kernel/string.c)
+pomelo_user(unet servers/net/net.c kernel/string.c)
 
 # ---------------------------------------------------------------------------
 # kernel: i386 freestanding ELF, loaded by `qemu-system-i386 -kernel`.
@@ -61,16 +62,18 @@ set(KSRC
     ${CMAKE_BINARY_DIR}/ufs_blob.o
     ${CMAKE_BINARY_DIR}/utty_blob.o
     ${CMAKE_BINARY_DIR}/ushell_blob.o
-    ${CMAKE_BINARY_DIR}/uprobe_blob.o)
+    ${CMAKE_BINARY_DIR}/uprobe_blob.o
+    ${CMAKE_BINARY_DIR}/unet_blob.o)
 
 set_source_files_properties(${CMAKE_BINARY_DIR}/ufs_blob.o
                             ${CMAKE_BINARY_DIR}/utty_blob.o
                             ${CMAKE_BINARY_DIR}/ushell_blob.o
                             ${CMAKE_BINARY_DIR}/uprobe_blob.o
+                            ${CMAKE_BINARY_DIR}/unet_blob.o
                             PROPERTIES GENERATED TRUE)
 
 add_executable(kernel ${KSRC})
-add_dependencies(kernel ufs_blob utty_blob ushell_blob uprobe_blob)
+add_dependencies(kernel ufs_blob utty_blob ushell_blob uprobe_blob unet_blob)
 target_include_directories(kernel PRIVATE ${CMAKE_SOURCE_DIR})
 target_compile_options(kernel PRIVATE
     -m32 -ffreestanding -fno-pie -fno-stack-protector -fno-builtin
@@ -108,6 +111,8 @@ endif()
 find_program(QEMU qemu-system-i386 REQUIRED)
 add_custom_target(run
     COMMAND ${QEMU} -kernel $<TARGET_FILE:kernel> -hda ${IMG} -serial stdio
+        -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0
+        -object filter-dump,id=f0,netdev=n0,file=${CMAKE_BINARY_DIR}/net.pcap
     DEPENDS kernel image)
 
 enable_testing()

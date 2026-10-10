@@ -36,7 +36,20 @@ void pic_remap(void) {
 }
 
 void pic_eoi(u32 irq) {
+    /* A slave line ends at the 8259 pair: ack the slave, then the master
+     * that forwards it. The first PCI card lands on IRQ 10+, which is
+     * what makes the second outb matter. */
+    if (irq >= 8) outb(0xA0, 0x20);
     outb(irq >= 8 ? 0xA0 : 0x20, 0x20);
+}
+
+/* Open one line the PIC was masking at remap time. The net driver calls
+ * this once it knows its irq from the PCI config space. */
+void pic_irq_enable(u32 irq) {
+    if (irq < 8)
+        outb(0x21, inb(0x21) & (u8)~(1u << irq));
+    else
+        outb(0xA1, inb(0xA1) & (u8)~(1u << (irq - 8)));
 }
 
 /* --- PIT: the timer tick that drives preemption ----------------------- */

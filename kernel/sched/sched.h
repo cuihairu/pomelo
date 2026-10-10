@@ -22,7 +22,7 @@ enum { ST_FREE, ST_READY, ST_BLOCKED };
  * an address, so it can never make the kernel map arbitrary memory.
  * The registry is the capability list. */
 #define PROG_NAME 8
-#define NPROG     4
+#define NPROG     5
 struct prog {
     char      name[PROG_NAME];
     const u8 *begin, *end;   /* the blob, inside the kernel image */

@@ -19,6 +19,7 @@ struct regs {
 void idt_init(void);
 void pic_remap(void);
 void pic_eoi(u32 irq);
+void pic_irq_enable(u32 irq);
 void pit_init(u32 hz);
 
 void intr_dispatch(struct regs *r);

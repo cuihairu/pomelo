@@ -35,6 +35,27 @@ qemu-system-i386 -kernel build/kernel -hda build/pomelo.img -serial stdio
 `-M q35`:那台机器的盘走 AHCI,ATA 端口悬空,fs 服务会打印一行提示然后停在
 原地。这是设计好的降级,不是卡死,见[第 8 章](/guide/fs-server)的 ata.c。
 
+## 网络:一块 e1000,挂在用户态网上
+
+`make run` 和两份冒烟脚本给 QEMU 加了三个参数:
+
+```sh
+-netdev user,id=n0,hostfwd=tcp::2323-:2323 \
+-device e1000,netdev=n0 \
+-object filter-dump,id=f0,netdev=n0,file=net.pcap
+```
+
+- `-netdev user`:qemu 内置的 SLIRP 用户态网,不需要 root、不碰宿主网卡,
+  一切都在 qemu 进程里仿真。地址是约定死的:guest 拿 10.0.2.15,网关
+  10.0.2.2;`hostfwd=tcp::2323-:2323` 把宿主的 2323 端口转进 guest 的 2323,
+  给后面章节的 netsh 用。
+- `-device e1000`:插一块 82540EM 网卡。net 任务开机探测它、读 MAC、
+  挂好收发环,发一个 ARP 请求——“net: e1000 up”那行和 pcap 里第一帧,
+  就是网线通了的全部证据。
+- `-object filter-dump`:把这块网卡上的帧原样落进 `net.pcap`,宿主机
+  `tcpdump -nn -r net.pcap` 就能逐帧检查。SLIRP 的帧不出宿主网卡,抓包
+  只能走这个文件,不能靠 tcpdump 监听真实接口。
+
 ## 冒烟测试:CI 里跑的也是它
 
 构建产物对不对,QEMU 说了算。`tools/smoke.sh` 开一台无显示的 QEMU,从串口
