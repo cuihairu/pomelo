@@ -38,7 +38,9 @@ qemu-system-i386 -kernel build/kernel -hda build/pomelo.img -serial stdio
 ## 冒烟测试:CI 里跑的也是它
 
 构建产物对不对,QEMU 说了算。`tools/smoke.sh` 开一台无显示的 QEMU,从串口
-替你敲 `help`、`ls`、`cat hello.txt`,然后 grep 期望的输出:
+替你敲一串命令(`help`、`ps`、`spawn probe`、`ls`、`cat hello.txt`、`uptime`、
+`echo`、`mem`),然后 grep 期望的输出;`tools/walkthrough.sh` 走得更远——
+多一整套 `write`/`ls`/`cat` 的新建文件往返,是 nightly 每晚跑的那份完整走查:
 
 ```sh
 ctest --test-dir build          # 或: cmake --build build -t test
@@ -55,9 +57,10 @@ QEMU 的 `sendkey` 在模拟 PS/2 键盘上敲一个 `mem`,再从 `0xb8000` 的 
 
 冒烟测试只跑 `pc`。仓库的 [nightly workflow](
 https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)每晚做一轮更
-完整的取证:构建内核、镜像和 ISO,然后在 QEMU 里开机两次——一次 `-nographic`
-抓串口记录,一次用 monitor 的 `screendump` 抓启动画面——把 ISO、内核、磁盘
-镜像、`serial.log` 和 `boot.png` 挂到 rolling 的 [nightly release](
+完整的取证:构建内核、镜像和 ISO,然后在 QEMU 里开机两次——一次跑
+`tools/walkthrough.sh` 走完整命令电池、抓串口记录,一次用 monitor 的
+`screendump` 抓启动画面——把 ISO、内核、磁盘镜像、`serial.log` 和 `boot.png`
+挂到 rolling 的 [nightly release](
 https://github.com/cuihairu/pomelo/releases/tag/nightly)。触发方式有两种:每晚
 定时,或手动 `workflow_dispatch`,附带机型选择(`q35` / `pc`,默认 `q35`)和
 可选的附加 QEMU 参数(例如 `-d int` 看中断)。取证脚本是 `tools/nightly-run.sh`,
@@ -68,7 +71,9 @@ https://github.com/cuihairu/pomelo/releases/tag/nightly)。触发方式有两种
 内核是**freestanding** 的:不用 libc,不链宿主库,所以不需要交叉工具链:
 
 ```cmake
-set(KERNEL_FLAGS -m32 -ffreestanding -fno-pie -fno-stack-protector -nostdlib)
+target_compile_options(kernel PRIVATE
+    -m32 -ffreestanding -fno-pie -fno-stack-protector -fno-builtin
+    -nostdlib -Wall -Wextra -O2 -g)
 ```
 
 - `-m32`:生成 32 位代码(QEMU pc 机器是 32 位引导);
@@ -116,13 +121,14 @@ add_custom_command(OUTPUT pomelo.img
 ## 本章文件
 
 ```
-CMakeLists.txt        顶层构建:内核、mkfs、镜像、ISO、run 目标、smoke 测试
-tools/mkfs/mkfs.c     宿主机磁盘镜像生成器
-tools/smoke.sh        QEMU 冒烟测试:串口驱动 shell,grep 验证
-tools/smoke-ps2.sh    QEMU 冒烟测试:PS/2 键盘输入,VGA 文本缓冲取证
-tools/nightly-run.sh  nightly 取证:双开机,串口记录 + screendump
-tools/mkiso.sh        把内核打成 BIOS 可引导的 ISO(grub multiboot)
-boot/kernel.ld        链接脚本
+CMakeLists.txt         顶层构建:内核、mkfs、镜像、ISO、run 目标、smoke 测试
+tools/mkfs/mkfs.c      宿主机磁盘镜像生成器
+tools/smoke.sh         QEMU 冒烟测试:串口驱动 shell,grep 验证
+tools/walkthrough.sh   实机走查:完整命令电池 + write/ls/cat 往返,逐条判分
+tools/smoke-ps2.sh     QEMU 冒烟测试:PS/2 键盘输入,VGA 文本缓冲取证
+tools/nightly-run.sh   nightly 取证:双开机,串口记录 + screendump
+tools/mkiso.sh         把内核打成 BIOS 可引导的 ISO(grub multiboot)
+boot/kernel.ld         链接脚本
 ```
 
 下一章:[分页上线](/guide/paging)。

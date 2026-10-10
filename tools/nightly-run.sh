@@ -3,10 +3,11 @@
 #
 #   nightly-run.sh <qemu> <machine> <kernel> <img> <outdir> [extra qemu args...]
 #
-# Run one drives the shell over the serial port (-nographic) and saves
-# the transcript as serial.log. Run two boots again with a monitor
-# socket so we can screendump the boot screen. Input pacing is the same
-# trick as tools/smoke.sh: one command per second, one interrupt each.
+# Run one is tools/walkthrough.sh: the full command battery over the serial
+# port (-nographic), transcript saved as serial.log, every check graded.
+# Run two boots again with a monitor socket so we can screendump the boot
+# screen. Input pacing is the same trick as tools/smoke.sh: one command
+# per second, one interrupt each.
 #
 # Machines differ in one way that matters here: `pc` has legacy IDE, so
 # ls/cat must work; `q35` wires its disk through AHCI and leaves the ATA
@@ -15,6 +16,7 @@
 
 qemu="$1"; mach="$2"; kernel="$3"; img="$4"; out="$5"; shift 5
 mkdir -p "$out"
+SCRIPT_DIR=$(dirname "$0")
 
 pacing() {
     sleep 2; printf '\n'
@@ -32,30 +34,9 @@ pacing() {
     sleep 2
 }
 
-# --- run 1: serial transcript -------------------------------------------
-{ pacing; } | timeout 25 "$qemu" -M "$mach" -kernel "$kernel" -hda "$img" \
-    -nographic -no-reboot "$@" > "$out/serial.log" 2>&1
-
-grep -q 'pomelo booting' "$out/serial.log" || { echo "FAIL: no boot banner"; exit 1; }
-grep -q "pomelo shell"   "$out/serial.log" || { echo "FAIL: shell never spoke"; exit 1; }
-grep -q 'probe is task 4 now'    "$out/serial.log" || { echo "FAIL: spawn did not revive probe"; exit 1; }
-grep -Eq 'up [0-9]+s'            "$out/serial.log" || { echo "FAIL: uptime never answered"; exit 1; }
-grep -Eq 'frames: [0-9]+ of [0-9]+ free' "$out/serial.log" || { echo "FAIL: mem never answered"; exit 1; }
-[ "$(grep -c 'probe: alive at ring 3' "$out/serial.log")" = 2 ] || { echo "FAIL: probe never spoke twice"; exit 1; }
-[ "$(grep -c 'killed: page fault' "$out/serial.log")" = 2 ]     || { echo "FAIL: probe was not killed twice"; exit 1; }
-if grep -q 'no disk behind the ata ports' "$out/serial.log"; then
-    echo "note: machine $mach has no legacy ide disk; shell-only checks"
-    grep -q 'fs: no disk' "$out/serial.log" \
-        || { echo "FAIL: fs did not answer no"; exit 1; }
-else
-    grep -q 'hello from the pomelo disk' "$out/serial.log" \
-        || { echo "FAIL: disk read failed"; exit 1; }
-    # the write path, end to end: create, write, commit, list, read back
-    grep -q 'wrote 18 bytes to walk.txt' "$out/serial.log" \
-        || { echo "FAIL: write never answered"; exit 1; }
-    grep -qE '^hello walkthrough$' "$out/serial.log" \
-        || { echo "FAIL: cat of a new file never answered"; exit 1; }
-fi
+# --- run 1: the walkthrough battery over the serial port -----------------
+sh "$SCRIPT_DIR/walkthrough.sh" "$qemu" "$kernel" "$img" "$out/serial.log" \
+    -M "$mach" "$@"
 
 # --- run 2: screendump of the boot screen --------------------------------
 rm -f "$out/monitor.sock" "$out/boot.ppm"
