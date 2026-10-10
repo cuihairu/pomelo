@@ -6,6 +6,7 @@
 
 #define NTASK 8
 #define STACK_BYTES 4096
+#define HZ 100            /* timer frequency: the scheduler's heartbeat */
 
 /* User eflags at spawn. Plain tasks get interrupts on; the fs service
  * also gets IOPL=3 because its ATA driver does `in`/`out` (and cli/sti
@@ -49,9 +50,11 @@ extern int cur;         /* running task index, -1 while in kmain */
 void sched_init(void);
 int  task_start(int slot, u32 dir, u32 entry, u32 ustack_top, u32 flags);
 void sched_enter(int first);           /* kmain jumps into `first` */
-void sched_tick(void);                 /* timer preemption point */
+void sched_tick(void);                 /* hand over the CPU (IRQ0 and yield) */
+void sched_clock_tick(void);           /* IRQ0: count the heartbeat, then tick */
 void sched_next(void);                 /* current blocks: pick another */
 void sched_wake(int tid);
+u32  sched_uptime(void);               /* seconds since boot */
 
 /* Programs: registration and the one door every start goes through. */
 int  prog_add(const char *name, const u8 *begin, const u8 *end, u32 flags);

@@ -16,3 +16,13 @@ void cmd_reboot(int argc, char **argv) {
     tty_puts("rebooting...\n");
     sys_reboot();
 }
+
+void cmd_uptime(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    char num[12];
+    num_str(sys_uptime(), num);
+    tty_puts("up ");
+    tty_puts(num);
+    tty_puts("s\n");
+}

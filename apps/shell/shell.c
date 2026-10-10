@@ -17,6 +17,7 @@ static const struct cmd cmds[] = {
     { "clear",  cmd_clear  },
     { "ps",     cmd_ps     },
     { "spawn",  cmd_spawn  },
+    { "uptime", cmd_uptime },
     { "reboot", cmd_reboot },
     { 0, 0 }
 };

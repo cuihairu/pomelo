@@ -74,10 +74,26 @@ static void sched_switch(int next) {
     switch_to(&tasks[prev].esp, tasks[next].esp);
 }
 
+static u32 ticks;   /* real heartbeats since boot: also the machine's clock */
+
 void sched_tick(void) {
     if (cur < 0) return;
     int next = pick_ready();
     if (next >= 0) sched_switch(next);
+}
+
+/* IRQ0 only. SYS_YIELD borrows the handover but not the clock: a yield
+ * is one task being polite, not time passing -- fs's polled ata waits
+ * yield hundreds of times a second and would run this clock fast. */
+void sched_clock_tick(void) {
+    ticks++;
+    sched_tick();
+}
+
+/* SYS_UPTIME: seconds since boot. The kernel's heartbeat doubles as its
+ * clock -- time is kernel state, so the path is a syscall, not a message. */
+u32 sched_uptime(void) {
+    return ticks / HZ;
 }
 
 /* Called when the current task blocks. If nobody is runnable the machine

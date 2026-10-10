@@ -40,7 +40,7 @@ void kmain(u32 magic, u32 info) {
     gdt_init();                 /* segments first: IDT entries point at 0x08 */
     idt_init();                 /* then the interrupt gates */
     pic_remap();                /* IRQs to vectors 32..47 */
-    pit_init(100);              /* 100 Hz: the scheduler's heartbeat */
+    pit_init(HZ);               /* 100 Hz: the scheduler's heartbeat */
     char_init();                /* console ISRs feed the tty by message */
 
     paging_init();              /* identity map on: addresses unchanged */

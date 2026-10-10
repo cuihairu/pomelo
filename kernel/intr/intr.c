@@ -67,7 +67,7 @@ void intr_dispatch(struct regs *r) {
         irq_dispatch(irq);
         pic_eoi(irq);
         irq_raise(irq);
-        if (irq == IRQ_PIT) sched_tick(); /* preemption point */
+        if (irq == IRQ_PIT) sched_clock_tick(); /* heartbeat + preemption */
         return;
     }
     panic("unhandled exception", r);

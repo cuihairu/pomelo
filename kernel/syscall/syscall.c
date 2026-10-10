@@ -46,6 +46,9 @@ void syscall_entry(struct regs *r) {
     case SYS_PS:
         r->eax = ps_snapshot((struct ps_entry *)r->ebx, r->ecx);
         return;
+    case SYS_UPTIME:
+        r->eax = sched_uptime();
+        return;
     }
     r->eax = -1;                      /* unknown syscall number */
 }
