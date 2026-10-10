@@ -15,7 +15,7 @@ shell——都是跑在消息传递之上的独立任务,而且每一个都住�
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # 在 QEMU 中启动:串口 shell 与 PS/2 键盘各测一遍
+ctest --test-dir build          # 在 QEMU 中启动:串口 shell、PS/2 键盘与鼠标各测一遍
 ```
 
 ## 本地跑起来
@@ -50,14 +50,14 @@ fs 服务会打印一行提示,之后对每个请求都回一句 `fs: no disk`,s
 办事只能发消息。内核不解析磁盘格式;文件系统放在内核外面,磁盘上的 bug
 想伤到内核,得先挤过那扇 IPC 的门。崩掉的服务也按出生的方式回来:shell 敲
 `spawn` 按名字请一遍,内核把它建回老座位——任务号不变,发往它的消息照走。
-内核唯一拥有的硬件是控制台:键盘和
-串口的中断落在 `kernel/char.c`,由它把每个字符变成一条消息投给 tty 服务;
-输出则反过来,一个系统调用就够。
+内核唯一拥有的硬件是控制台:键盘、鼠标和
+串口的中断落在 `kernel/char.c` 与 `kernel/mouse.c`,由它们把每次击键、每份
+鼠标样本变成一条消息投给 tty 服务;输出则反过来,一个系统调用就够。
 
 ```
 boot/       从上电到第一行 C:multiboot、GDT、IDT、PIT。
 kernel/     微内核本体:中断、调度、IPC、系统调用、分页,外加喂 tty 的控制台
-            硬件(char.c)。
+            硬件(char.c, mouse.c)。
 servers/fs/ 文件服务,以及它那套极简磁盘格式(超级块 + inode)。
 servers/tty/ 终端服务:内核送来的字符攒成行。
 apps/shell/ 命令行 REPL,通过 IPC 与各服务对话(跑在 ring 3)。

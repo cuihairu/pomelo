@@ -73,6 +73,9 @@ burst 输入会撑爆它的行缓冲。给真机上电之前先让它自己跑�
 `tools/smoke-ps2.sh` 测的是另一条输入路:串口挂成 `null`,谁也不喂它,
 QEMU 的 `sendkey` 在模拟 PS/2 键盘上敲一个 `mem`,再从 `0xb8000` 的 VGA
 文本缓冲里把应答抠出来——键盘中断、扫描码表、屏幕回显,全在这条测试里。
+`tools/smoke-mouse.sh` 把同一套取证搬到 PS/2 鼠标上:monitor 发
+`mouse_move` / `mouse_button`,验的是光标格的属性字节(`0x70` 是光标,
+`0x07` 是它离开后还原的格子)。
 
 ## nightly:每晚真跑一遍
 
@@ -138,6 +141,7 @@ add_custom_command(OUTPUT pomelo.img
 | 开机即重启 | 中断开早了,见[第 2 章](/guide/boot) |
 | `fs: bad disk` | 没挂 `-hda` 或镜像损坏,重新 `cmake --build build` |
 | 键盘没反应 | 看串口有没有输出,确认 tty 任务被创建了 |
+| 鼠标没反应 | 串口里 `mouse:` 那行是初始化结论:没这行是 8042 握手没过,有这行还没动,多半是 `-usbdevice tablet` 之类的参数把默认 PS/2 鼠标顶掉了,IRQ12 自然不来事件 |
 
 ## 本章文件
 
@@ -147,9 +151,10 @@ tools/mkfs/mkfs.c      宿主机磁盘镜像生成器
 tools/smoke.sh         QEMU 冒烟测试:串口驱动 shell,grep 验证
 tools/walkthrough.sh   实机走查:完整命令电池 + write/ls/cat 往返,逐条判分
 tools/smoke-ps2.sh     QEMU 冒烟测试:PS/2 键盘输入,VGA 文本缓冲取证
+tools/smoke-mouse.sh   QEMU 冒烟测试:PS/2 鼠标事件,VGA 属性字节取证
 tools/nightly-run.sh   nightly 取证:双开机,串口记录 + screendump
 tools/mkiso.sh         把内核打成 BIOS 可引导的 ISO(grub multiboot)
 boot/kernel.ld         链接脚本
 ```
 
-下一章:[分页上线](/guide/paging)。
+下一章:[PS/2 鼠标](/guide/mouse)。

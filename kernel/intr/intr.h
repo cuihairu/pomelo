@@ -15,6 +15,7 @@ struct regs {
 #define IRQ_PIT   0   /* timer */
 #define IRQ_KBD   1   /* PS/2 keyboard */
 #define IRQ_COM1  4   /* serial port receive */
+#define IRQ_MOUSE 12  /* PS/2 mouse, the 8042's aux channel */
 
 void idt_init(void);
 void pic_remap(void);

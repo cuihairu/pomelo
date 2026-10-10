@@ -38,6 +38,7 @@ export default defineConfig({
         text: '收尾',
         items: [
           { text: '11 · 构建与运行', link: '/guide/build-and-run' },
+          { text: '12 · PS/2 鼠标', link: '/guide/mouse' },
           { text: '13 · 分页上线', link: '/guide/paging' },
           { text: '14 · 真隔离:ring3', link: '/guide/ring3' },
           { text: '15 · 倒下与爬起', link: '/guide/restart' }

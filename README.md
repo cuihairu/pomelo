@@ -17,7 +17,7 @@ install.
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # boots in QEMU: the serial shell and the PS/2 keyboard
+ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyboard and the mouse
 ```
 
 ## Run it locally
@@ -58,14 +58,15 @@ lives outside it so that a disk bug has to get through IPC before it can hurt
 anyone. And a crashed service comes back the way it was born: `spawn` asks by
 name, the kernel rebuilds it in its old seat — same task id, same senders
 still addressing it. The one piece of hardware the kernel does own is the
-console: the keyboard and serial interrupts land in `kernel/char.c`, which
-turns each character into a message for the tty service — output is one
-syscall away.
+console: the keyboard, mouse and serial interrupts land in `kernel/char.c`
+and `kernel/mouse.c`, which turn each keystroke and each motion sample into
+a message for the tty service — output is one syscall away.
 
 ```
 boot/       From power-on to the first line of C: multiboot, GDT, IDT, PIT.
 kernel/     The microkernel: interrupts, scheduling, IPC, syscalls, paging,
-            plus the console hardware (char.c) that feeds the tty service.
+            plus the console hardware (char.c, mouse.c) that feeds the tty
+            service.
 servers/fs/ A file server and its tiny on-disk format (superblock + inodes).
 servers/tty/ A terminal server: kernel-delivered chars to a line buffer.
 apps/shell/ A REPL that talks to the services over IPC (runs at ring 3).

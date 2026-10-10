@@ -1,6 +1,7 @@
 #include "gdt.h"
 #include "../kernel/char.h"
 #include "../kernel/kprintf.h"
+#include "../kernel/mouse.h"
 #include "../kernel/vga.h"
 #include "../kernel/intr/intr.h"
 #include "../kernel/mm/paging.h"
@@ -46,6 +47,7 @@ void kmain(u32 magic, u32 info) {
     pic_remap();                /* IRQs to vectors 32..47 */
     pit_init(HZ);               /* 100 Hz: the scheduler's heartbeat */
     char_init();                /* console ISRs feed the tty by message */
+    mouse_init();               /* the other 8042 device: probe, then irq12 */
 
     paging_init();              /* identity map on: addresses unchanged */
     kprintf("paging on: low 16m identity\n");

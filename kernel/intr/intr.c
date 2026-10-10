@@ -27,11 +27,11 @@ void pic_remap(void) {
     outb(0x21, 0x20); outb(0xA1, 0x28);   /* ICW2: vectors 32..47 */
     outb(0x21, 0x04); outb(0xA1, 0x02);   /* ICW3: slave on IRQ2 */
     outb(0x21, 0x01); outb(0xA1, 0x01);   /* ICW4: 8086 mode */
-    /* Open only the lines somebody owns: timer, keyboard, serial and
-     * the cascade. The other lines stay masked; a driver opens its own
-     * line through sys_irq_enable when it claims the hardware. */
+    /* Open only the lines somebody owns: timer, keyboard, serial, the
+     * cascade and the mouse. The other lines stay masked; a driver opens
+     * its own line through sys_irq_enable when it claims the hardware. */
     outb(0x21, (u8)~(1 << IRQ_PIT | 1 << IRQ_KBD | 1 << 2 | 1 << IRQ_COM1));
-    outb(0xA1, 0xFF);                     /* no slave lines in use */
+    outb(0xA1, (u8)~(1 << (IRQ_MOUSE - 8)));  /* slave side: the mouse */
 }
 
 void pic_eoi(u32 irq) {

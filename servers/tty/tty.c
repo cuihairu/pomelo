@@ -72,6 +72,12 @@ static void handle(struct msg *m) {
         have_pending = 1;
         deliver();
     }
+    /* MSG_TTY_MOUSE lands here and is dropped, on purpose: the shell
+     * speaks in lines, not coordinates, so today there is nothing to
+     * forward it to. The call is the tty's to make, and whoever wants
+     * motion data asks the same way -- the message already carries dx,
+     * dy and the buttons. The on-screen block is drawn kernel-side and
+     * needs no help from us. */
 }
 
 void tty_main(void) {

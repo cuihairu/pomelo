@@ -52,7 +52,7 @@ pomelo_user(unet servers/net/net.c kernel/string.c)
 # ---------------------------------------------------------------------------
 set(KSRC
     boot/boot.S boot/gdt.c boot/main.c
-    kernel/char.c kernel/kprintf.c kernel/string.c kernel/vga.c
+    kernel/char.c kernel/kprintf.c kernel/mouse.c kernel/string.c kernel/vga.c
     kernel/intr/idt.c kernel/intr/intr.c kernel/intr/irq.c
     kernel/intr/stubs.S
     kernel/mm/frame.c kernel/mm/paging.c
@@ -125,4 +125,8 @@ add_test(NAME smoke-ps2
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-ps2.sh
             ${QEMU} ${KERNEL_ELF} ${IMG} smoke-ps2.log)
-set_tests_properties(smoke smoke-ps2 PROPERTIES TIMEOUT 120)
+add_test(NAME smoke-mouse
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-mouse.sh
+            ${QEMU} ${KERNEL_ELF} ${IMG} smoke-mouse.log)
+set_tests_properties(smoke smoke-ps2 smoke-mouse PROPERTIES TIMEOUT 120)
