@@ -43,10 +43,17 @@ static void tty_char(char c) {
     ipc_send_kernel(TID_TTY, &m);
 }
 
+/* The tty inbox is finite and the tty drains it only when the scheduler
+ * runs it, so a host pasting a whole line at once can outrun it. The
+ * rule that keeps every keystroke: never take a byte out of the FIFO
+ * unless the queue can take it too -- a byte left in the FIFO is not
+ * lost, one taken out and dropped is. char_retry (from the timer) gives
+ * held-up input another chance once the tty has drained. */
+
 /* Serial console: QEMU forwards `-serial stdio` bytes here, so the
  * machine is fully drivable without a GUI keyboard. */
 static void uart_isr(void) {
-    while (inb(CON_COM1 + 5) & 0x01) {      /* data ready */
+    while ((inb(CON_COM1 + 5) & 0x01) && ipc_can_send(TID_TTY)) {
         char c = inb(CON_COM1);
         if (c == '\r') c = '\n';            /* terminals send CR */
         tty_char(c);
@@ -54,6 +61,12 @@ static void uart_isr(void) {
 }
 
 static int shift, skip_ext;
+
+/* One keystroke can land while the queue is full; a human types one at
+ * a time, so one hold slot is enough -- the FIFO plays this role for
+ * pasted serial input. */
+static char held_key;
+static int  key_held;
 
 static char map_scan(u8 s) {
     if (s == 0x1C) return '\n';
@@ -92,7 +105,20 @@ static void kbd_isr(void) {
     if (s == 0xAA || s == 0xB6) { shift = 0; return; }
     if (s & 0x80) return;                      /* key release */
     char c = map_scan(s);
-    if (c) tty_char(c);
+    if (!c) return;
+    if (ipc_can_send(TID_TTY)) tty_char(c);
+    else { held_key = c; key_held = 1; }
+}
+
+/* Timer's offer to the input path: push the held keystroke, then see if
+ * the FIFO has more. */
+void char_retry(void) {
+    if (key_held && ipc_can_send(TID_TTY)) {
+        tty_char(held_key);
+        key_held = 0;
+    }
+    if (inb(CON_COM1 + 5) & 0x01)
+        uart_isr();
 }
 
 void char_init(void) {

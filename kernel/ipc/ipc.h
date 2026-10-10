@@ -24,6 +24,7 @@ struct msgq {
 void msgq_reset(struct msgq *q);
 int  ipc_send(int dst, struct msg *m);       /* 0 ok, -1 queue full */
 int  ipc_send_kernel(int dst, struct msg *m); /* same, signed by the kernel */
+int  ipc_can_send(int dst);                  /* room for one more message? */
 int  ipc_recv(struct msg *out, int block);   /* 0 ok, -1 if !block and empty */
 
 #endif

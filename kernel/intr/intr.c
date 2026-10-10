@@ -1,4 +1,5 @@
 #include "intr.h"
+#include "../char.h"
 #include "../kprintf.h"
 #include "../mm/paging.h"
 #include "../sched/sched.h"
@@ -67,7 +68,10 @@ void intr_dispatch(struct regs *r) {
         irq_dispatch(irq);
         pic_eoi(irq);
         irq_raise(irq);
-        if (irq == IRQ_PIT) sched_clock_tick(); /* heartbeat + preemption */
+        if (irq == IRQ_PIT) {
+            char_retry();             /* input the tty queue could not take */
+            sched_clock_tick();       /* heartbeat + preemption */
+        }
         return;
     }
     panic("unhandled exception", r);

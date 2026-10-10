@@ -36,6 +36,12 @@ int ipc_send_kernel(int dst, struct msg *m) {
     return enqueue(dst, m, 0);
 }
 
+/* Room in dst's inbox? Interrupt handlers ask before they read: a byte
+ * left in the UART FIFO is not lost, one taken out and dropped is. */
+int ipc_can_send(int dst) {
+    return tasks[dst].inbox.count < MSGQ_CAP;
+}
+
 int ipc_recv(struct msg *out, int block) {
     for (;;) {
         intr_disable();
