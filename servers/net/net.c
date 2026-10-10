@@ -89,6 +89,7 @@ static void say_ip(const char *pre, const u8 ip[4], const char *post) {
 }
 
 /* "52:55:0a:00:02:02\n" -- the colon form, with its own newline. */
+/* "52:55:0a:00:02:02\n" -- the colon form, with its own newline. */
 static void say_mac(const u8 m[6]) {
     char line[20];
     int p = 0;
@@ -97,6 +98,15 @@ static void say_mac(const u8 m[6]) {
         line[p++] = hex[m[i] >> 4];
         line[p++] = hex[m[i] & 0xF];
     }
+    line[p++] = '\n';
+    sys_write(line, p);
+}
+
+static void say_hex(const char *pre, u32 v) {
+    char line[48];
+    int p = 0;
+    for (const char *s = pre; *s; s++) line[p++] = *s;
+    for (int i = 7; i >= 0; i--) line[p++] = hex[(v >> (i * 4)) & 0xF];
     line[p++] = '\n';
     sys_write(line, p);
 }
@@ -159,11 +169,13 @@ static void net_bringup(void) {
     /* PCI probe: scan bus 0 for the 82540EM. The config ports answer an
      * iopl-3 task the same way the ata ports answer fs. */
     u32 bar = 0;
+    int dev = 0;
     for (int d = 0; d < 32 && !bar; d++) {
         u32 id = pci_read(0, d, 0, 0);
         if ((id & 0xFFFF) == E1000_VENDOR && (id >> 16) == E1000_DEVICE) {
             bar = pci_read(0, d, 0, 0x10) & ~0xFu;
             irq = (int)(pci_read(0, d, 0, 0x3C) & 0xFF);
+            dev = d;
             /* Firmware normally turns the card on before the OS runs;
              * qemu's direct kernel boot runs no firmware, so we are it:
              * decode io+memory and, above all, open bus mastering --
@@ -176,6 +188,7 @@ static void net_bringup(void) {
         say("net: no e1000 on the pci bus\n");
         return;
     }
+    say_hex("net: dbg cmd ", pci_read(0, dev, 0, 0x04));
 
     /* The card's MMIO block sits near the top of the 32-bit space, far
      * outside the identity-mapped 16 MB -- only the kernel can put it in
@@ -228,6 +241,7 @@ static void net_bringup(void) {
     wr(E1000_RCTL, RCTL_EN | RCTL_BAM);
     wr(E1000_TCTL, TCTL_EN | TCTL_PSP);
     wr(E1000_IMS, IMS_RXT0 | IMS_TXDW);
+    say_hex("net: dbg ims ", rd(E1000_IMS));
     sys_irq_enable(irq);
     /* The card may carry interrupt causes from before we got here (link
      * status settles on its own while the line is still masked). Reading
