@@ -43,7 +43,7 @@ struct inode {
     char name[12];      /* 文件名,定长省事 */
     u32 size;           /* 字节数 */
     u32 direct[6];      /* 直接块指针:6 个 LBA 号 */
-    u8  _pad[20];
+    u8  pad[64 - 4 - NAMELEN - 4 - NDIRECT * 4];   /* 凑满 64 字节 */
 };
 ```
 

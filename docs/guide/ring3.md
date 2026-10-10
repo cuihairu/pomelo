@@ -43,7 +43,7 @@ CPU 自动切过来的内核栈。每任务一个内核栈,TSS 里只放当前�
 
 ## 出生即 ring 3
 
-内核里已经没有"ring 0 任务"这回事了:`task_spawn_user`(kernel/sched/sched.c)
+内核里已经没有"ring 0 任务"这回事了:`task_start`(kernel/sched/sched.c)
 给每个新任务铺的不是普通栈,而是一副完整的 iret 帧:
 
 ```c
@@ -154,7 +154,7 @@ ISR 若还住在 tty 里,撞上 fs 在跑的那一拍就是一次页错误。所
 ```
 boot/gdt.c/.h           ring 3 段、TSS、esp0
 tools/user.ld           用户链接脚本(.hdr 入口 + .bss 折叠)
-kernel/sched/sched.c    task_spawn_user 的 iret 帧、eflags/IOPL、cr3/esp0 切换
+kernel/sched/sched.c    task_start 的 iret 帧、eflags/IOPL、cr3/esp0 切换
 kernel/sched/switch.S   ring3_entry
 kernel/mm/paging.c      pdir_user_new:每任务一份世界
 kernel/char.c           控制台硬件收编:中断变消息,输出变系统调用

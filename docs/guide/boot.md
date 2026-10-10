@@ -32,12 +32,13 @@ Multiboot 头的 ELF 文件,自己充当引导器:把内核载入内存,切到�
 
 ```asm
 _start:
-    movl $stack_top, %esp     # 设栈,否则 C 函数一返回就崩
-    pushl %ebx                # Multiboot 信息结构指针,转交 kmain
+    movl $boot_stack_top, %esp  # 设栈,否则 C 函数一返回就崩
+    pushl %ebx                  # Multiboot 信息结构指针,转交 kmain
+    pushl %eax                  # 魔数,转交 kmain 校验
     call  kmain
 1:  cli
     hlt
-    jmp 1b                    # 内核入口不该返回;真返回了就停住
+    jmp 1b                      # 内核入口不该返回;真返回了就停住
 ```
 
 栈空间开在 `.bss` 里的一块静态数组——此刻还没有内存管理,能用静态内存就用静态内存。
@@ -55,7 +56,8 @@ void kmain(u32 magic, u32 info) {
     gdt_init();                 /* segments first: IDT entries point at 0x08 */
     idt_init();                 /* then the interrupt gates */
     pic_remap();                /* IRQs to vectors 32..47 */
-    pit_init(100);              /* 100 Hz: the scheduler's heartbeat */
+    pit_init(HZ);               /* 100 Hz: the scheduler's heartbeat */
+    char_init();                /* console ISRs feed the tty by message */
 
     paging_init();              /* identity map on: addresses unchanged */
     kprintf("paging on: low 16m identity\n");

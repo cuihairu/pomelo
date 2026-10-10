@@ -13,6 +13,7 @@ struct task {
     u32        pdir;      /* 页目录,0 = 用内核自己的;第 14 章 */
     int        state;     /* FREE / READY / BLOCKED */
     int        woke;      /* 被 sched_wake 碰过;irq_wait 靠它认出“为消息而醒” */
+    const struct prog *prog;  /* 这个座位属于哪个程序;第 15 章 */
     struct msgq inbox;    /* 它自己的消息队列,IPC 章详解 */
 };
 ```

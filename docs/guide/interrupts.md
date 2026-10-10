@@ -61,12 +61,23 @@ void intr_dispatch(struct regs *r) {
         syscall_entry(r);
         return;
     }
+    if (r->int_no == 14) {             /* 页错误 */
+        task_fault(r, "page fault", cr2_fault());
+        return;
+    }
+    if (r->int_no == 13) {             /* general protection */
+        task_fault(r, "general protection fault", 0);
+        return;
+    }
     if (r->int_no >= 32 && r->int_no < 48) {
         u32 irq = r->int_no - 32;
         irq_dispatch(irq);            /* 认领了这条线的,先跑它的三行 */
         pic_eoi(irq);                 /* 先告诉 8259:这个我收下了 */
         irq_raise(irq);               /* 再唤醒在等着它的任务 */
-        if (irq == IRQ_PIT) sched_tick();   /* 时钟:抢占点 */
+        if (irq == IRQ_PIT) {
+            char_retry();             /* tty 队列没收下的输入,再试一次 */
+            sched_clock_tick();       /* 心跳 + 抢占 */
+        }
     }
 }
 ```

@@ -23,7 +23,7 @@ switch_to:
     ret                         # pops the new task's resume address
 
 /* First entry into a ring 3 task. The stack top is a full iret frame
- * (eip, cs, eflags, esp, ss) laid down by task_spawn_user; loading the
+ * (eip, cs, eflags, esp, ss) laid down by task_start; loading the
  * user data segments is the last thing kernel rings do on the way out. */
 .globl ring3_entry
 ring3_entry:

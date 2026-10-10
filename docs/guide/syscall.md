@@ -12,7 +12,7 @@
 内核”这件事形式化下来。[第 14 章](/guide/ring3)任务搬进 ring 3 时,这扇门
 加上 `DPL=3` 就成了用户到内核的唯一通道——接口没改,只是门上挂了锁。
 
-## 一张七行的分发表
+## 一张十一行的分发表
 
 ```c
 enum {
@@ -23,6 +23,10 @@ enum {
     SYS_REBOOT  = 4,   /* 重启 */
     SYS_WRITE   = 5,   /* ebx=buf, ecx=len: 控制台输出,内核侧 */
     SYS_CLEAR   = 6,   /* 清屏 */
+    SYS_SPAWN   = 7,   /* ebx=name: 按名字启动一个已注册程序 */
+    SYS_PS      = 8,   /* ebx=buf, ecx=max: 任务表快照 */
+    SYS_UPTIME  = 9,   /* 开机秒数:心跳倒回来 */
+    SYS_MEM     = 10,  /* ebx=&mem_info: 帧位图,数一遍 */
 };
 ```
 
@@ -56,6 +60,19 @@ void syscall_entry(struct regs *r) {
         con_clear();
         r->eax = 0;
         return;
+    case SYS_SPAWN:
+        r->eax = sched_spawn((const char *)r->ebx);
+        return;
+    case SYS_PS:
+        r->eax = ps_snapshot((struct ps_entry *)r->ebx, r->ecx);
+        return;
+    case SYS_UPTIME:
+        r->eax = sched_uptime();
+        return;
+    case SYS_MEM:
+        frame_stats((struct mem_info *)r->ebx);
+        r->eax = 0;
+        return;
     }
     r->eax = -1;                      /* 没这个号 */
 }
@@ -77,12 +94,13 @@ static inline int sys_send(int dst, struct msg *m) {
 ```
 
 `int 0x80` 让 CPU 转到 IDT 第 128 项——我们在 `idt_init` 里把它接到
-`syscall_entry`,后者保存现场后调用 `syscall_dispatch`。这条路径和[中断章](/guide/interrupts)
-用的是同一套桩机制,只是入口不同。
+`intr_stub_128`。桩补一个假的错误码、压上向量号,跳进 `intr_common` 保存
+`regs` 现场,交给 `intr_dispatch`;它认出 0x80 才转手 `syscall_entry`。
+这条路径和[中断章](/guide/interrupts)用的是同一套桩机制,只是入口不同。
 
 ## 一扇门,而不是一堆函数
 
-值得强调:Pomelo 的任务和内核之间**只有这七个调用**。读文件、按键,统统
+值得强调:Pomelo 的任务和内核之间**只有这十一个调用**。读文件、按键,统统
 不经过系统调用,而是服务与服务之间的消息(走 `SYS_SEND`/`SYS_RECV`);
 `SYS_WRITE`/`SYS_CLEAR` 是仅有的例外——屏幕归内核管,任务想说话只有这一个
 出口(缘由见[第 14 章](/guide/ring3))。系统调用表越小,内核越小;内核越小,
