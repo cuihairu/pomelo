@@ -10,17 +10,22 @@ ring 3 任务(和 shell 一样是嵌进内核镜像的 blob,住自己的地址�
 
 ```c
 void fs_main(void) {
-    struct msg m;                 /* also the forever-park mailbox below */
+    struct msg m;
+    const char *why = 0;          /* why the disk is unusable, if it is */
     if (ata_read(0, &sb) < 0) {
-        con_puts("fs: no disk behind the ata ports, staying idle\n");
-        for (;;) sys_recv(&m);    /* park: block forever, costs nothing */
+        con_puts("fs: no disk behind the ata ports, answering no\n");
+        why = "no disk";
+    } else if (sb.magic != FS_MAGIC) {
+        con_puts("fs: bad disk magic, answering no\n");
+        why = "bad magic";
+    } else {
+        for (int s = 0; s < INODE_SECTORS; s++)
+            ata_read(INODE_START + s, (u8 *)inodes + s * SECTOR);
     }
-    if (sb.magic != FS_MAGIC) {
-        con_puts("fs: bad disk magic, staying idle\n");
-        for (;;) sys_recv(&m);
-    }
+
     for (;;) {
         sys_recv(&m);
+        if (why) { refuse(&m, why); continue; }   /* cannot serve: say so */
         switch (m.type) {
         case MSG_FS_LS:     do_ls(&m);     break;
         case MSG_FS_OPEN:   do_open(&m);   break;
@@ -33,10 +38,13 @@ void fs_main(void) {
 }
 ```
 
-“躺平”是有讲究的:fs 只把自己的状态搁成 `BLOCKED` 阻塞在 `sys_recv` 上,
-不再消耗一丝 CPU;内核和其余服务照常活着。用户敲 `ls` 会得不到回音,但
-shell 没死、tty 没死——故障被关在一个服务里,这正是把文件系统放内核外面
-买到的保险。(`con_puts` 来自 `apps/con.h`:ring 3 的程序想说话,只有
+“不能服务”和“不能答话”是两回事。fs 发现盘不可用时把自己的状态记成 `why`,
+从此对每个请求回一条 `MSG_FS_ERR`,data 里带上原因——shell 那头打印出
+`fs: no disk`,提示符照常回来。协议里专门留了这一种消息:服务可以拒绝请求,
+但不可以装死。这比早年间“停靠不回话”的写法好一截:故障照样被关在一个服务里
+(内核和其余服务照常活着,这份保险一点没少),而客户端拿到的不是无期的沉默,
+是一句可以拿去报错的答复。把失败作为答案送回来,是 IPC 协议设计里最容易被
+忘掉的一条。(`con_puts` 来自 `apps/con.h`:ring 3 的程序想说话,只有
 `sys_write` 这一条路。)
 
 一眼望去像个网络服务器——事实上它就是。微内核里的“系统服务”和分布式系统里的
@@ -65,7 +73,7 @@ ring 0 专属指令;到了 ring 3,礼貌的做法就是交还调度器。)
 而 `q35` 机型把盘接在 AHCI 后面,这些端口**悬空**——从悬空总线读回来的是
 0xFF,它的 BSY 位恰好是 1,天真的等待循环会永远等一台不存在的盘。所以每次
 等待先过一遍 `ata_dead()`:状态字节是 0xFF 就立刻报错返回,让 fs 有机会
-优雅停靠。驱动不信任总线,和 IPC 消息要检查返回值,是同一种教养。
+把"不"作为答案送回去。驱动不信任总线,和 IPC 消息要检查返回值,是同一种教养。
 
 还有一道只属于本章的门缝:驱动如今跑在 ring 3,`in`/`out` 这类端口指令在
 这个特权级默认是禁令。x86 给的钥匙叫 **IOPL**:eflags 里的两位,`IOPL >= CPL`

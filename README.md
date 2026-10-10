@@ -43,7 +43,8 @@ qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
 
 `-M pc` is not decoration: the default `q35` machine wires its disk through
 AHCI, out of reach of this ATA driver — the fs server prints a note and
-parks. The [nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+answers every request with `fs: no disk`, so the shell stays usable. The
+[nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 boots both machines every day and ships the serial log and a boot
 screenshot with its [release](https://github.com/cuihairu/pomelo/releases/tag/nightly).
 

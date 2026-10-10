@@ -4,13 +4,23 @@
 /* Client wrappers for the fs protocol: build a request, send it to
  * TID_FS, block for the reply. Tiny, and each maps to one message pair. */
 
+/* Every reply may be a refusal: MSG_FS_ERR prints its reason, returns -1. */
+static int reply_wait(struct msg *r) {
+    sys_recv(r);
+    if (r->type != MSG_FS_ERR) return 0;
+    tty_puts("fs: ");
+    tty_write(r->data, strnlen(r->data, MSG_DATA));
+    tty_puts("\n");
+    return -1;
+}
+
 int fs_open(const char *name, int *size) {
     struct msg m, r;
     memset(&m, 0, sizeof m);
     m.type = MSG_FS_OPEN;
     memcpy(m.data, name, strnlen(name, MSG_DATA - 1));
     sys_send(TID_FS, &m);
-    sys_recv(&r);
+    if (reply_wait(&r) < 0) return -1;
     if (size) *size = r.arg1;
     return r.arg0;
 }
@@ -22,7 +32,7 @@ int fs_read(int ino, int off, char *buf) {
     m.arg0 = ino;
     m.arg1 = off;
     sys_send(TID_FS, &m);
-    sys_recv(&r);
+    if (reply_wait(&r) < 0) return -1;
     memcpy(buf, r.data, r.arg0);
     return r.arg0;
 }
@@ -33,7 +43,7 @@ int fs_create(const char *name) {
     m.type = MSG_FS_CREATE;
     memcpy(m.data, name, strnlen(name, MSG_DATA - 1));
     sys_send(TID_FS, &m);
-    sys_recv(&r);
+    if (reply_wait(&r) < 0) return -1;
     return r.arg0;
 }
 
@@ -47,7 +57,7 @@ int fs_write(int ino, int off, const char *buf, int n) {
     m.arg2 = n;
     memcpy(m.data, buf, n);
     sys_send(TID_FS, &m);
-    sys_recv(&r);
+    if (reply_wait(&r) < 0) return -1;
     return r.arg0;
 }
 
@@ -58,7 +68,7 @@ int fs_commit(int ino, int size) {
     m.arg0 = ino;
     m.arg1 = size;
     sys_send(TID_FS, &m);
-    sys_recv(&r);
+    if (reply_wait(&r) < 0) return -1;
     return r.arg0;
 }
 
@@ -71,7 +81,7 @@ void fs_ls_begin(void) {
 
 int fs_ls_next(char *name, int *size) {
     struct msg r;
-    sys_recv(&r);
+    if (reply_wait(&r) < 0) return 1;
     if (r.arg0 < 0) return 1;
     memcpy(name, r.data, NAMELEN);
     name[NAMELEN] = 0;

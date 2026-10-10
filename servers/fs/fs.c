@@ -29,6 +29,16 @@ void do_create(struct msg *m);
 void do_write(struct msg *m);
 void do_commit(struct msg *m);
 
+/* A service that cannot serve still owes its client an answer: one
+ * MSG_FS_ERR with the reason in the data. */
+void refuse(struct msg *q, const char *why) {
+    struct msg r;
+    memset(&r, 0, sizeof r);
+    r.type = MSG_FS_ERR;
+    memcpy(r.data, why, strnlen(why, MSG_DATA - 1));
+    sys_send(q->src, &r);
+}
+
 static void do_ls(struct msg *m) {
     for (int i = 0; i < NINODES; i++)
         if (inodes[i].used)
@@ -47,20 +57,22 @@ static void do_open(struct msg *m) {
 }
 
 void fs_main(void) {
-    struct msg m;                 /* also the forever-park mailbox below */
+    struct msg m;
+    const char *why = 0;          /* why the disk is unusable, if it is */
     if (ata_read(0, &sb) < 0) {
-        con_puts("fs: no disk behind the ata ports, staying idle\n");
-        for (;;) sys_recv(&m);    /* park: block forever, costs nothing */
+        con_puts("fs: no disk behind the ata ports, answering no\n");
+        why = "no disk";
+    } else if (sb.magic != FS_MAGIC) {
+        con_puts("fs: bad disk magic, answering no\n");
+        why = "bad magic";
+    } else {
+        for (int s = 0; s < INODE_SECTORS; s++)
+            ata_read(INODE_START + s, (u8 *)inodes + s * SECTOR);
     }
-    if (sb.magic != FS_MAGIC) {
-        con_puts("fs: bad disk magic, staying idle\n");
-        for (;;) sys_recv(&m);
-    }
-    for (int s = 0; s < INODE_SECTORS; s++)
-        ata_read(INODE_START + s, (u8 *)inodes + s * SECTOR);
 
     for (;;) {
         sys_recv(&m);
+        if (why) { refuse(&m, why); continue; }   /* cannot serve: say so */
         switch (m.type) {
         case MSG_FS_LS:     do_ls(&m);     break;
         case MSG_FS_OPEN:   do_open(&m);   break;

@@ -14,14 +14,16 @@
 #define MSG_FS_CREATE 4   /* data=name -> arg0=inode|-1 */
 #define MSG_FS_WRITE  5   /* arg0=inode, arg1=off, arg2=len, data -> arg0=len */
 #define MSG_FS_COMMIT 6   /* arg0=inode, arg1=size -> arg0=0 */
+#define MSG_FS_ERR    7   /* any request -> data=reason: the answer is no */
 
 /* ata.c: polled PIO, one sector at a time. */
 int ata_read(u32 lba, void *buf);
 int ata_write(u32 lba, const void *buf);
 
-/* fs.c: shared state and the reply helper. */
+/* fs.c: shared state and the reply helpers. */
 extern struct superblock sb;
 extern struct inode inodes[NINODES];
 void reply(struct msg *q, int a0, int a1, int a2, const char *d, int dl);
+void refuse(struct msg *q, const char *why);   /* MSG_FS_ERR: the answer is no */
 
 #endif

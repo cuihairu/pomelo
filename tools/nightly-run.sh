@@ -10,8 +10,8 @@
 #
 # Machines differ in one way that matters here: `pc` has legacy IDE, so
 # ls/cat must work; `q35` wires its disk through AHCI and leaves the ATA
-# ports floating, so the fs service reports the absence and parks. Both
-# count as green; a silent hang does not.
+# ports floating, so the fs service answers every request with `fs: no
+# disk`. Both count as green; a silent hang does not.
 
 qemu="$1"; mach="$2"; kernel="$3"; img="$4"; out="$5"; shift 5
 mkdir -p "$out"
@@ -37,6 +37,8 @@ grep -q 'probe is task 4 now'    "$out/serial.log" || { echo "FAIL: spawn did no
 [ "$(grep -c 'killed: page fault' "$out/serial.log")" = 2 ]     || { echo "FAIL: probe was not killed twice"; exit 1; }
 if grep -q 'no disk behind the ata ports' "$out/serial.log"; then
     echo "note: machine $mach has no legacy ide disk; shell-only checks"
+    grep -q 'fs: no disk' "$out/serial.log" \
+        || { echo "FAIL: fs did not answer no"; exit 1; }
 else
     grep -q 'hello from the pomelo disk' "$out/serial.log" \
         || { echo "FAIL: disk read failed"; exit 1; }
