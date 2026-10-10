@@ -19,6 +19,14 @@ void irq_dispatch(u32 irq) {
     if (handlers[irq]) handlers[irq]();
 }
 
+/* A claimed line belongs to a ring 3 driver, and on a level-triggered
+ * pic input that driver must quiet the device before the line is
+ * re-armed -- so the kernel leaves the eoi to it (sys_irq_eoi). Lines
+ * nobody claimed are kernel business all the way: acked on the spot. */
+int irq_owned(u32 irq) {
+    return handlers[irq] != 0;
+}
+
 /* Called from interrupt context: wake the waiter if any, else remember. */
 void irq_raise(u32 irq) {
     if (waiters[irq]) {

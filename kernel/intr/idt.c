@@ -29,13 +29,12 @@ void idt_set(int n, u32 handler, u16 sel, u8 flags) {
     idt[n].offset_hi = handler >> 16;
 }
 
-/* Defined in stubs.S: one tiny wrapper per vector we actually use. */
+/* Defined in stubs.S: one wrapper per hardware vector, listed in vector
+ * order, plus the paths below. */
+extern const u32 irq_stub_table[16];
 void intr_stub_exc(void);
 void intr_stub_13(void);      /* GPF: ring 3 offender or kernel bug */
 void intr_stub_14(void);      /* page fault: same split */
-void intr_stub_32(void);      /* IRQ_PIT */
-void intr_stub_33(void);      /* IRQ_KBD */
-void intr_stub_36(void);      /* IRQ_COM1 */
 void intr_stub_128(void);     /* the syscall gate */
 
 void idt_init(void) {
@@ -51,10 +50,13 @@ void idt_init(void) {
     idt_set(13, (u32)intr_stub_13, 0x08, 0x8E);
     idt_set(14, (u32)intr_stub_14, 0x08, 0x8E);
 
-    /* Hardware IRQs live at 32..47 after the PIC remap. */
-    idt_set(32 + IRQ_PIT,  (u32)intr_stub_32,  0x08, 0x8E);
-    idt_set(32 + IRQ_KBD,  (u32)intr_stub_33,  0x08, 0x8E);
-    idt_set(32 + IRQ_COM1, (u32)intr_stub_36,  0x08, 0x8E);
+    /* Hardware IRQs live at 32..47 after the PIC remap. Every line gets
+     * the same gate: the ones owned at boot (PIT, kbd, com1) and any a
+     * driver opens later via sys_irq_enable ride the same path, and an
+     * unclaimed interrupt is acked and parked instead of #GP-ing the
+     * machine. */
+    for (int i = 0; i < 16; i++)
+        idt_set(32 + i, irq_stub_table[i], 0x08, 0x8E);
 
     /* The syscall gate. DPL 3: user code may raise it, hardware IRQs may
      * not be raised by anyone. */

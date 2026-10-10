@@ -67,6 +67,13 @@ void syscall_entry(struct regs *r) {
         irq_install(r->ebx, net_irq_stub);
         r->eax = 0;
         return;
+    case SYS_IRQ_EOI:
+        /* The other half of owning a line: the driver quieted its device,
+         * now the pic may re-arm it. The kernel skipped the eoi on
+         * delivery exactly so this could happen in the right order. */
+        pic_eoi(r->ebx);
+        r->eax = 0;
+        return;
     case SYS_V2P:
         r->eax = v2p(r->ebx);
         return;

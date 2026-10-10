@@ -22,6 +22,14 @@ int strncmp(const char *a, const char *b, unsigned n) {
     return 0;
 }
 
+int memcmp(const void *a, const void *b, unsigned n) {
+    const u8 *pa = a;
+    const u8 *pb = b;
+    for (; n; n--, pa++, pb++)
+        if (*pa != *pb) return *pa - *pb;
+    return 0;
+}
+
 unsigned strnlen(const char *s, unsigned max) {
     unsigned n = 0;
     while (n < max && s[n]) n++;

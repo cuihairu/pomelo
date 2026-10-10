@@ -41,7 +41,7 @@
 
 #define CTRL_RST (1u << 26)    /* self-clearing; the emulator honors it */
 #define RAH_AV   (1u << 31)
-#define IMS_TXDW (1u << 0)     /* tx descriptor written back */
+#define IMS_TXDW (1u << 4)     /* tx descriptor written back */
 #define IMS_RXT0 (1u << 7)     /* rx timer: frames arrived */
 #define RCTL_EN  (1u << 1)
 #define RCTL_BAM (1u << 15)    /* accept broadcast */
@@ -77,5 +77,14 @@ struct tx_desc {
 #define ETH_BROADCAST ((const u8 *)"\xff\xff\xff\xff\xff\xff")
 #define ETH_ARP      0x0806
 #define ETH_IP       0x0800
+
+/* ip protocol numbers, the ones this stack understands */
+#define IP_PROTO_ICMP 1
+#define IP_PROTO_UDP  17
+#define IP_PROTO_TCP  6
+
+/* icmp types */
+#define ICMP_ECHO_REPLY   0
+#define ICMP_ECHO_REQUEST 8
 
 #endif

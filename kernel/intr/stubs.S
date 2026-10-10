@@ -12,9 +12,23 @@ intr_stub_\vec:
 
 .section .text
 
-STUB 32          /* IRQ_PIT: timer tick */
-STUB 33          /* IRQ_KBD: PS/2 keyboard */
-STUB 36          /* IRQ_COM1: serial receive */
+/* Every hardware line lands on the same tiny wrapper, one per vector:
+ * the pic was remapped to 32..47 and any line a driver opens must have
+ * a gate, claimed or not. Whether the line has an owner is irq.c's
+ * business -- an unclaimed interrupt is acked and parked. */
+.irp v, 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+STUB \v
+.endr
+
+/* idt_init walks this to wire all sixteen vectors at once. */
+.section .data
+.globl irq_stub_table
+irq_stub_table:
+.irp v, 32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47
+    .long intr_stub_\v
+.endr
+
+.section .text
 STUB 128         /* the syscall gate */
 
 /* All CPU exceptions share one stub: we do not decode them, we stop. */

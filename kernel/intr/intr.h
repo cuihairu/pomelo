@@ -26,6 +26,7 @@ void intr_dispatch(struct regs *r);
 void panic(const char *why, struct regs *r);
 void irq_install(u32 irq, void (*fn)(void));
 void irq_dispatch(u32 irq);/* run a line's handler, if owned */
+int  irq_owned(u32 irq);   /* is a driver waiting on this line? */
 void irq_raise(u32 irq);   /* called from intr_dispatch */
 void irq_wait(u32 mask);   /* block until any irq in the mask fires */
 

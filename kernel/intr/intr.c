@@ -28,19 +28,23 @@ void pic_remap(void) {
     outb(0x21, 0x04); outb(0xA1, 0x02);   /* ICW3: slave on IRQ2 */
     outb(0x21, 0x01); outb(0xA1, 0x01);   /* ICW4: 8086 mode */
     /* Open only the lines somebody owns: timer, keyboard, serial and
-     * the cascade. An open, unclaimed line vectors through an empty
-     * IDT gate and #GPs the kernel -- the disk's IRQ14 does exactly
-     * that the moment its first command completes. */
+     * the cascade. The other lines stay masked; a driver opens its own
+     * line through sys_irq_enable when it claims the hardware. */
     outb(0x21, (u8)~(1 << IRQ_PIT | 1 << IRQ_KBD | 1 << 2 | 1 << IRQ_COM1));
     outb(0xA1, 0xFF);                     /* no slave lines in use */
 }
 
 void pic_eoi(u32 irq) {
     /* A slave line ends at the 8259 pair: ack the slave, then the master
-     * that forwards it. The first PCI card lands on IRQ 10+, which is
-     * what makes the second outb matter. */
-    if (irq >= 8) outb(0xA0, 0x20);
-    outb(irq >= 8 ? 0xA0 : 0x20, 0x20);
+     * that forwarded it. Skipping the master parks its cascade bit in
+     * the ISR, and with that bit in service the timer and everything
+     * else below it goes silent. */
+    if (irq >= 8) {
+        outb(0xA0, 0x20);
+        outb(0x20, 0x20);
+    } else {
+        outb(0x20, 0x20);
+    }
 }
 
 /* Open one line the PIC was masking at remap time. The net driver calls
@@ -79,7 +83,13 @@ void intr_dispatch(struct regs *r) {
     if (r->int_no >= 32 && r->int_no < 48) {
         u32 irq = r->int_no - 32;
         irq_dispatch(irq);
-        pic_eoi(irq);
+        if (!irq_owned(irq))
+            pic_eoi(irq);
+        /* A claimed line skips the eoi here: on a level input the device
+         * must stop asserting before the pic is re-armed, and only the
+         * driver that owns the hardware knows how. It acks, then calls
+         * sys_irq_eoi. Re-arming last also lets the pending irq of a
+         * second arrival wait in the pic instead of being lost. */
         irq_raise(irq);
         if (irq == IRQ_PIT) {
             char_retry();             /* input the tty queue could not take */
