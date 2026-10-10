@@ -49,6 +49,10 @@ void syscall_entry(struct regs *r) {
     case SYS_UPTIME:
         r->eax = sched_uptime();
         return;
+    case SYS_MEM:
+        frame_stats((struct mem_info *)r->ebx);
+        r->eax = 0;
+        return;
     }
     r->eax = -1;                      /* unknown syscall number */
 }

@@ -24,6 +24,7 @@ void cmd_reboot(int argc, char **argv);
 void cmd_ps(int argc, char **argv);
 void cmd_spawn(int argc, char **argv);
 void cmd_uptime(int argc, char **argv);
+void cmd_mem(int argc, char **argv);
 
 /* shell.c: tty client helpers */
 void tty_puts(const char *s);

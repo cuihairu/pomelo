@@ -26,3 +26,18 @@ void cmd_uptime(int argc, char **argv) {
     tty_puts(num);
     tty_puts("s\n");
 }
+
+void cmd_mem(int argc, char **argv) {
+    (void)argc;
+    (void)argv;
+    struct mem_info m;
+    sys_mem(&m);
+    char free_n[12], total_n[12];
+    num_str(m.free, free_n);
+    num_str(m.total, total_n);
+    tty_puts("frames: ");
+    tty_puts(free_n);
+    tty_puts(" of ");
+    tty_puts(total_n);
+    tty_puts(" free\n");
+}

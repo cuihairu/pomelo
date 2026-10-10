@@ -3,6 +3,7 @@
 
 #include "../types.h"
 #include "../ipc/ipc.h"
+#include "../mm/frame.h"
 #include "../sched/sched.h"
 
 /* Well-known task ids, assigned in spawn order by boot/main.c. */
@@ -22,6 +23,7 @@ enum {
     SYS_SPAWN    = 7,   /* ebx=name: start a registered program */
     SYS_PS       = 8,   /* ebx=buf, ecx=max: task-table snapshot */
     SYS_UPTIME   = 9,   /* seconds since boot: the heartbeat, read back */
+    SYS_MEM      = 10,  /* ebx=&mem_info: the frame bitmap, counted */
 };
 
 struct regs;                       /* kernel/intr/intr.h */
@@ -45,5 +47,6 @@ static inline void sys_clear(void)                  { (void)gate(SYS_CLEAR, 0, 0
 static inline int  sys_spawn(const char *name)      { return gate(SYS_SPAWN, (int)name, 0); }
 static inline int  sys_ps(struct ps_entry *b, int n){ return gate(SYS_PS, (int)b, n); }
 static inline u32  sys_uptime(void)                 { return gate(SYS_UPTIME, 0, 0); }
+static inline void sys_mem(struct mem_info *m)      { (void)gate(SYS_MEM, (int)m, 0); }
 
 #endif

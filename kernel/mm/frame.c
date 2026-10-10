@@ -44,3 +44,17 @@ void frame_free(u32 pa) {
     if (pa / 4096 < first_free) first_free = pa / 4096;
     intr_enable();
 }
+
+/* Count the bitmap for SYS_MEM. Interrupts off so total/used/free agree
+ * with each other -- a tick in the middle could hand out a frame between
+ * two counts and make the numbers not add up. */
+void frame_stats(struct mem_info *out) {
+    intr_disable();
+    u32 used = 0;
+    for (u32 f = 0; f < NFRAMES; f++)
+        if (is_used(f)) used++;
+    out->total = NFRAMES;
+    out->used = used;
+    out->free = NFRAMES - used;
+    intr_enable();
+}

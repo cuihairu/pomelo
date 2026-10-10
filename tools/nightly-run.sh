@@ -25,6 +25,7 @@ pacing() {
     sleep 1; printf 'cat hello.txt\n'
     sleep 1; printf 'uptime\n'
     sleep 1; printf 'echo hello pomelo\n'
+    sleep 1; printf 'mem\n'
     sleep 2
 }
 
@@ -36,6 +37,7 @@ grep -q 'pomelo booting' "$out/serial.log" || { echo "FAIL: no boot banner"; exi
 grep -q "pomelo shell"   "$out/serial.log" || { echo "FAIL: shell never spoke"; exit 1; }
 grep -q 'probe is task 4 now'    "$out/serial.log" || { echo "FAIL: spawn did not revive probe"; exit 1; }
 grep -Eq 'up [0-9]+s'            "$out/serial.log" || { echo "FAIL: uptime never answered"; exit 1; }
+grep -Eq 'frames: [0-9]+ of [0-9]+ free' "$out/serial.log" || { echo "FAIL: mem never answered"; exit 1; }
 [ "$(grep -c 'probe: alive at ring 3' "$out/serial.log")" = 2 ] || { echo "FAIL: probe never spoke twice"; exit 1; }
 [ "$(grep -c 'killed: page fault' "$out/serial.log")" = 2 ]     || { echo "FAIL: probe was not killed twice"; exit 1; }
 if grep -q 'no disk behind the ata ports' "$out/serial.log"; then
