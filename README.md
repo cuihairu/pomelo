@@ -1,8 +1,8 @@
 # Pomelo
 
-> A microkernel written from scratch in C — small enough to read in one sitting.
+> A microkernel written in C — small enough to read in one sitting, built for learning how kernels work.
 
-Pomelo is a teaching kernel for the i386, built as a **logical microkernel**: the
+Pomelo is a small i386 kernel for studying OS internals on your own, built as a **logical microkernel**: the
 kernel only does five things (interrupt dispatch, scheduling, IPC, a syscall
 gate, paging). Everything else — the file system, the terminal, the shell — runs
 as separate tasks on top of message passing, and every one of them lives in its

@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: Pomelo
-  text: 一个 i386 教学用的简易微内核
-  tagline: C 实现的 i386 小内核 · 边读代码边学操作系统 · 每个目录就是一个概念 · 教学用途,非生产可用
+  text: 一个用来自学内核知识的 i386 简易微内核
+  tagline: C 实现的 i386 小内核 · 边读代码边学操作系统 · 每个目录就是一个概念 · 自学用途,非生产可用
   actions:
     - theme: brand
       text: 开始阅读
