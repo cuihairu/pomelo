@@ -41,7 +41,7 @@
 
 #define CTRL_RST (1u << 26)    /* self-clearing; the emulator honors it */
 #define RAH_AV   (1u << 31)
-#define IMS_TXDW (1u << 4)     /* tx descriptor written back */
+#define IMS_TXDW (1u << 0)     /* tx descriptor written back */
 #define IMS_RXT0 (1u << 7)     /* rx timer: frames arrived */
 #define RCTL_EN  (1u << 1)
 #define RCTL_BAM (1u << 15)    /* accept broadcast */
