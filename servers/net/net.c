@@ -3,12 +3,13 @@
 #include "net.h"
 
 /* The net service: e1000 driver plus the small protocol stack, one ring
- * 3 task. Stage 1 drove bare frames; this file adds arp, ipv4 and icmp.
- * Everything arrives in one service loop (pump): sleep on the irq, clear
- * the card's cause, sweep the rx ring, dispatch each frame by ethertype.
- * The boot sequence rides the same loop -- send a request, pump until
- * the answer lands -- so the startup transcript doubles as the proof:
- * the gateway's arp reply and one icmp echo round trip, both real. */
+ * 3 task. Stage 1 drove bare frames; this file adds arp, ipv4, icmp and
+ * a udp echo service. Everything arrives in one service loop (pump):
+ * sleep on the irq, clear the card's cause, sweep the rx ring, dispatch
+ * each frame by ethertype. The boot sequence rides the same loop --
+ * send a request, pump until the answer lands -- so the startup
+ * transcript doubles as the proof: the gateway's arp reply and one icmp
+ * echo round trip, both real. */
 
 static void net_rx(const u8 *f, int len);
 
@@ -340,6 +341,7 @@ static void ip_tx(const u8 dst[4], u8 proto, const u8 *payload, int len) {
 }
 
 static void icmp_in(const u8 *c, int len, const u8 src[4]);
+static void udp_in(const u8 *u, int len, const u8 src[4]);
 
 /* One inbound datagram: check the envelope, then hand the payload up.
  * The header checksum is verified -- answering broken packets is the
@@ -353,6 +355,8 @@ static void ip_in(const u8 *ip, int len) {
     if (memcmp(ip + 16, ip_self, 4)) return;
     if (ip[9] == IP_PROTO_ICMP)
         icmp_in(ip + ihl, total - ihl, ip + 12);
+    else if (ip[9] == IP_PROTO_UDP)
+        udp_in(ip + ihl, total - ihl, ip + 12);
 }
 
 /* --- icmp -------------------------------------------------------------------- */
@@ -392,6 +396,66 @@ static void ping_gw(void) {
     c[2] = (u8)(sum >> 8);
     c[3] = (u8)sum;
     ip_tx(ip_gw, IP_PROTO_ICMP, c, sizeof c);
+}
+
+/* --- udp ---------------------------------------------------------------------- */
+
+/* The one port this stage serves; the host side of the demo forwards to
+ * it with -hostfwd udp::2325-:2325 and talks with nc -u 127.0.0.1 2325. */
+#define UDP_ECHO_PORT 2325
+
+/* The rfc 768 checksum covers a pseudo-header (ips, protocol, length)
+ * on top of the datagram. IPv4 permits sending zero instead -- we fold
+ * the real thing anyway, because a wrong-checksum datagram is exactly
+ * the kind of bug that costs an afternoon to find. */
+static u16 udp_cksum(const u8 src[4], const u8 dst[4], const u8 *d, int len) {
+    u32 s = 0;
+    for (int i = 0; i < 4; i += 2)
+        s += (u32)((src[i] << 8) | src[i + 1]);
+    for (int i = 0; i < 4; i += 2)
+        s += (u32)((dst[i] << 8) | dst[i + 1]);
+    s += IP_PROTO_UDP + (u32)len;
+    for (int i = 0; i < len; i += 2) {
+        u16 hi = d[i];
+        u16 lo = (i + 1 < len) ? d[i + 1] : 0;   /* odd tail pads zero */
+        s += (u32)((hi << 8) | lo);
+    }
+    while (s >> 16)
+        s = (s & 0xFFFF) + (s >> 16);
+    return (u16)(~s & 0xFFFF);
+}
+
+/* Wrap a payload and send it out. No fragmentation -- datagrams that do
+ * not fit the echo buffer are refused at the door, not cut short. */
+static void udp_tx(const u8 dst[4], u16 dport, u16 sport,
+                   const u8 *payload, int len) {
+    static u8 d[8 + 512];
+    if (!arp_ready || len > 512)
+        return;
+    d[0] = (u8)(sport >> 8); d[1] = (u8)sport;
+    d[2] = (u8)(dport >> 8); d[3] = (u8)dport;
+    d[4] = (u8)((8 + len) >> 8); d[5] = (u8)(8 + len);
+    d[6] = 0; d[7] = 0;                   /* checksum, filled below */
+    memcpy(d + 8, payload, len);
+    u16 sum = udp_cksum(ip_self, dst, d, 8 + len);
+    d[6] = (u8)(sum >> 8);
+    d[7] = (u8)sum;
+    ip_tx(dst, IP_PROTO_UDP, d, 8 + len);
+}
+
+/* One inbound datagram. Only the echo port answers, and it answers by
+ * mirroring the payload to wherever the datagram came from; other ports
+ * are silently not ours. */
+static void udp_in(const u8 *u, int len, const u8 src[4]) {
+    if (len < 8) return;
+    u16 sport = (u16)((u[0] << 8) | u[1]);
+    u16 dport = (u16)((u[2] << 8) | u[3]);
+    u16 ulen  = (u16)((u[4] << 8) | u[5]);
+    if (ulen < 8 || ulen > len) return;
+    if (dport != UDP_ECHO_PORT) return;
+    int plen = ulen - 8;
+    if (plen > 512) return;
+    udp_tx(src, sport, UDP_ECHO_PORT, u + 8, plen);
 }
 
 /* --- ethernet dispatch -------------------------------------------------------- */
@@ -441,5 +505,8 @@ void net_main(void) {
     if (ping_ok)
         say_ip("net: ping ", ip_gw, " ok");
 
+    /* Then it is just the service: every pump dispatches what arrived,
+     * and the udp echo port answers whoever knocks. */
+    say("net: udp echo on 2325\n");
     for (;;) pump();
 }
