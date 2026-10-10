@@ -23,7 +23,7 @@ jobs:
       - name: install qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-system-x86
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 socat
 
       - name: build
         run: |

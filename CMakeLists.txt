@@ -116,3 +116,8 @@ add_test(NAME smoke
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke.sh
             ${QEMU} ${KERNEL_ELF} ${IMG} smoke.log)
+add_test(NAME smoke-ps2
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-ps2.sh
+            ${QEMU} ${KERNEL_ELF} ${IMG} smoke-ps2.log)
+set_tests_properties(smoke smoke-ps2 PROPERTIES TIMEOUT 120)

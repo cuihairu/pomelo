@@ -15,7 +15,7 @@ shell——都是跑在消息传递之上的独立任务,而且每一个都住�
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # 在 QEMU 中启动,校验启动横幅
+ctest --test-dir build          # 在 QEMU 中启动:串口 shell 与 PS/2 键盘各测一遍
 ```
 
 ## 本地跑起来

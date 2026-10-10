@@ -17,7 +17,7 @@ install.
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # boots in QEMU, verifies the banner
+ctest --test-dir build          # boots in QEMU: the serial shell and the PS/2 keyboard
 ```
 
 ## Run it locally

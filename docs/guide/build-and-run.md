@@ -47,6 +47,10 @@ ctest --test-dir build          # 或: cmake --build build -t test
 测试是**节奏驱动**的:每条命令之间隔一秒——tty 一个中断才处理几个字符,
 burst 输入会撑爆它的行缓冲。给真机上电之前先让它自己跑一遍,这习惯值回票价。
 
+`tools/smoke-ps2.sh` 测的是另一条输入路:串口挂成 `null`,谁也不喂它,
+QEMU 的 `sendkey` 在模拟 PS/2 键盘上敲一个 `mem`,再从 `0xb8000` 的 VGA
+文本缓冲里把应答抠出来——键盘中断、扫描码表、屏幕回显,全在这条测试里。
+
 ## nightly:每晚真跑一遍
 
 冒烟测试只跑 `pc`。仓库的 [nightly workflow](
@@ -115,6 +119,7 @@ add_custom_command(OUTPUT pomelo.img
 CMakeLists.txt        顶层构建:内核、mkfs、镜像、ISO、run 目标、smoke 测试
 tools/mkfs/mkfs.c     宿主机磁盘镜像生成器
 tools/smoke.sh        QEMU 冒烟测试:串口驱动 shell,grep 验证
+tools/smoke-ps2.sh    QEMU 冒烟测试:PS/2 键盘输入,VGA 文本缓冲取证
 tools/nightly-run.sh  nightly 取证:双开机,串口记录 + screendump
 tools/mkiso.sh        把内核打成 BIOS 可引导的 ISO(grub multiboot)
 boot/kernel.ld        链接脚本
