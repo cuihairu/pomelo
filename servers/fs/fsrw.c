@@ -50,7 +50,7 @@ void do_create(struct msg *m) {
     int slot = -1;
     for (int i = 0; i < NINODES; i++)
         if (!inodes[i].used) { slot = i; break; }
-    if (slot < 0) { reply(m, -1, 0, 0, 0, 0); return; }
+    if (slot < 0) { refuse(m, "no space"); return; }   /* full is a refusal */
 
     memset(&inodes[slot], 0, sizeof(struct inode));
     int n = strnlen(m->data, NAMELEN - 1);

@@ -25,6 +25,9 @@ pacing() {
     sleep 1; printf 'cat hello.txt\n'
     sleep 1; printf 'uptime\n'
     sleep 1; printf 'echo hello pomelo\n'
+    sleep 1; printf 'write walk.txt hello walkthrough\n'
+    sleep 1; printf 'ls\n'
+    sleep 1; printf 'cat walk.txt\n'
     sleep 1; printf 'mem\n'
     sleep 2
 }
@@ -47,6 +50,11 @@ if grep -q 'no disk behind the ata ports' "$out/serial.log"; then
 else
     grep -q 'hello from the pomelo disk' "$out/serial.log" \
         || { echo "FAIL: disk read failed"; exit 1; }
+    # the write path, end to end: create, write, commit, list, read back
+    grep -q 'wrote 18 bytes to walk.txt' "$out/serial.log" \
+        || { echo "FAIL: write never answered"; exit 1; }
+    grep -qE '^hello walkthrough$' "$out/serial.log" \
+        || { echo "FAIL: cat of a new file never answered"; exit 1; }
 fi
 
 # --- run 2: screendump of the boot screen --------------------------------

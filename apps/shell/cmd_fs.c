@@ -28,6 +28,7 @@ void cmd_cat(int argc, char **argv) {
     }
     int size;
     int ino = fs_open(argv[1], &size);
+    if (ino == FS_REFUSED) return;         /* the reason is already printed */
     if (ino < 0) {
         tty_puts("no such file\n");
         return;
@@ -57,6 +58,7 @@ void cmd_write(int argc, char **argv) {
     content[total++] = '\n';
 
     int ino = fs_create(argv[1]);
+    if (ino == FS_REFUSED) return;         /* the reason is already printed */
     if (ino < 0) {
         tty_puts("no space left\n");
         return;

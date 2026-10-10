@@ -32,7 +32,10 @@ void tty_write(const char *s, int n);
 void tty_getline(char *buf, int max);
 void tty_clear(void);
 
-/* fsio.c: fs client helpers */
+/* fsio.c: fs client helpers. A wrapper returns FS_REFUSED when the
+ * server said no -- the reason is already printed by then; any other
+ * negative is a plain protocol answer the caller words itself. */
+#define FS_REFUSED (-2)
 int  fs_open(const char *name, int *size);
 int  fs_read(int ino, int off, char *buf);
 int  fs_create(const char *name);

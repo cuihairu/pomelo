@@ -49,4 +49,12 @@ static inline int  sys_ps(struct ps_entry *b, int n){ return gate(SYS_PS, (int)b
 static inline u32  sys_uptime(void)                 { return gate(SYS_UPTIME, 0, 0); }
 static inline void sys_mem(struct mem_info *m)      { (void)gate(SYS_MEM, (int)m, 0); }
 
+/* sys_send reports a full queue instead of waiting; a caller that must
+ * not lose the message retries -- a request dropped is a reply you
+ * would wait for forever. The queue always drains, because receiver
+ * main loops never block on a full queue, only on an empty one. */
+static inline void sys_send_wait(int dst, struct msg *m) {
+    while (sys_send(dst, m) < 0) sys_yield();
+}
+
 #endif

@@ -32,7 +32,7 @@ void tty_write(const char *s, int n) {
         m.type = MSG_TTY_PUTS;
         m.arg0 = c;
         memcpy(m.data, s, c);
-        sys_send(TID_TTY, &m);
+        sys_send_wait(TID_TTY, &m);
         s += c;
         n -= c;
     }
@@ -46,7 +46,7 @@ void tty_getline(char *buf, int max) {
     struct msg m;
     memset(&m, 0, sizeof m);
     m.type = MSG_TTY_GETLINE;
-    sys_send(TID_TTY, &m);                /* order: one line, please */
+    sys_send_wait(TID_TTY, &m);           /* order: one line, please */
     sys_recv(&m);                         /* ...and block for the answer */
     int n = m.arg0 < max - 1 ? m.arg0 : max - 1;
     memcpy(buf, m.data, n);
@@ -57,7 +57,7 @@ void tty_clear(void) {
     struct msg m;
     memset(&m, 0, sizeof m);
     m.type = MSG_TTY_CLEAR;
-    sys_send(TID_TTY, &m);
+    sys_send_wait(TID_TTY, &m);
 }
 
 /* Split in place on spaces; at most 7 arguments. */

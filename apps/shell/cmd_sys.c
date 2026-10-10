@@ -13,7 +13,9 @@ void cmd_clear(int argc, char **argv) {
 void cmd_reboot(int argc, char **argv) {
     (void)argc;
     (void)argv;
-    tty_puts("rebooting...\n");
+    /* Say it straight to the kernel console: a tty message would still
+     * be sitting in the queue when the reset lands. */
+    sys_write("rebooting...\n", 13);
     sys_reboot();
 }
 

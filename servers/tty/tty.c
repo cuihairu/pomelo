@@ -32,7 +32,7 @@ static void deliver(void) {
     r.type = MSG_TTY_GETLINE;
     r.arg0 = done.len[done_head];
     memcpy(r.data, done.buf[done_head], done.len[done_head]);
-    sys_send(pending.src, &r);
+    sys_send_wait(pending.src, &r);       /* the shell must get its line */
     have_pending = 0;
     done_head = (done_head + 1) % DONE_CAP;
     done_cnt--;

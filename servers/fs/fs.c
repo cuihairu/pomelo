@@ -21,7 +21,7 @@ void reply(struct msg *q, int a0, int a1, int a2, const char *d, int dl) {
     r.arg1 = a1;
     r.arg2 = a2;
     if (d && dl > 0) memcpy(r.data, d, dl > MSG_DATA ? MSG_DATA : dl);
-    sys_send(q->src, &r);
+    sys_send_wait(q->src, &r);            /* a lost reply strands the client */
 }
 
 void do_read(struct msg *m);      /* fsrw.c */
@@ -36,7 +36,7 @@ void refuse(struct msg *q, const char *why) {
     memset(&r, 0, sizeof r);
     r.type = MSG_FS_ERR;
     memcpy(r.data, why, strnlen(why, MSG_DATA - 1));
-    sys_send(q->src, &r);
+    sys_send_wait(q->src, &r);            /* "no" must arrive too */
 }
 
 static void do_ls(struct msg *m) {
