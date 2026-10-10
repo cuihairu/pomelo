@@ -62,9 +62,11 @@ void syscall_entry(struct regs *r) {
         /* The pic mask and the idt are kernel territory; the driver that
          * owns the line asks here. The stub is empty by design: waking
          * the waiter is irq.c's job, and the driver clears the device's
-         * own interrupt state once it runs. */
+         * own interrupt state once it runs. Claiming the line is what
+         * moves its eoi from the kernel to the driver (sys_irq_eoi). */
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
+        irq_claim(r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_EOI:
