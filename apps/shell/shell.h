@@ -18,6 +18,7 @@ void cmd_help(int argc, char **argv);
 void cmd_ls(int argc, char **argv);
 void cmd_cat(int argc, char **argv);
 void cmd_write(int argc, char **argv);
+void cmd_echo(int argc, char **argv);
 void cmd_clear(int argc, char **argv);
 void cmd_reboot(int argc, char **argv);
 void cmd_ps(int argc, char **argv);

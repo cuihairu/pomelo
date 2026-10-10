@@ -17,10 +17,12 @@ qemu="$1"; kernel="$2"; img="$3"; out="$4"
   sleep 1; printf 'ls\n'
   sleep 1; printf 'cat hello.txt\n'
   sleep 1; printf 'uptime\n'
-  sleep 2; } | timeout 15 "$qemu" -kernel "$kernel" -hda "$img" \
+  sleep 1; printf 'echo hello pomelo\n'
+  sleep 2; } | timeout 18 "$qemu" -kernel "$kernel" -hda "$img" \
       -serial stdio -display none -no-reboot > "$out" 2>&1
 
 grep -q 'hello from the pomelo disk' "$out"
+grep -q 'hello pomelo' "$out"
 # the ring 3 probe: alive, then rightly killed for touching kernel memory;
 # then the shell revives it by name, and it dies all over again
 grep -q 'probe is task 4 now' "$out"

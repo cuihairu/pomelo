@@ -14,6 +14,7 @@ static const struct cmd cmds[] = {
     { "ls",     cmd_ls     },
     { "cat",    cmd_cat    },
     { "write",  cmd_write  },
+    { "echo",   cmd_echo   },
     { "clear",  cmd_clear  },
     { "ps",     cmd_ps     },
     { "spawn",  cmd_spawn  },

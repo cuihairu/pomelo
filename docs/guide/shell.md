@@ -8,10 +8,11 @@ shell 是全书代码最少的一章,却是前面所有机制的**总装车间**
 
 ```c
 void shell_main(void) {
-    tty_puts("welcome to pomelo. 'help' for commands.\n");
+    static char line[64];
+    tty_puts("\npomelo shell - type 'help'\n");
     for (;;) {
         tty_puts("pomelo> ");
-        tty_getline(line);                    /* 向 tty 服务要一行 */
+        tty_getline(line, sizeof line);       /* 向 tty 服务要一行 */
         run(line);                            /* 查表分发 */
     }
 }
@@ -28,12 +29,16 @@ void shell_main(void) {
 struct cmd { const char *name; void (*fn)(int argc, char **argv); };
 
 static const struct cmd cmds[] = {
-    { "help",  cmd_help  },
-    { "ls",    cmd_ls    },
-    { "cat",   cmd_cat   },
-    { "write", cmd_write },
-    { "clear", cmd_clear },
-    { "reboot",cmd_reboot},
+    { "help",   cmd_help   },
+    { "ls",     cmd_ls     },
+    { "cat",    cmd_cat    },
+    { "write",  cmd_write  },
+    { "echo",   cmd_echo   },
+    { "clear",  cmd_clear  },
+    { "ps",     cmd_ps     },
+    { "spawn",  cmd_spawn  },
+    { "uptime", cmd_uptime },
+    { "reboot", cmd_reboot },
     { 0, 0 }
 };
 ```
@@ -41,6 +46,11 @@ static const struct cmd cmds[] = {
 `run` 把输入按空格切成 `argv`,线性查表,命中就调用。加一条新命令 = 写一个
 `cmd_xxx` 函数 + 表里加一行,**不用碰 shell 的任何既有代码**。这是把“数据驱动”
 用在最朴素的地方。
+
+`echo` 就是这条规则的最小样板(`cmd_echo.c`):不碰 fs、不碰内核,把 `argv`
+借 tty 说出去就完事——想加自己的命令,照抄它起步。其余命令各按依赖落座:
+`ls`/`cat`/`write` 走 fs,`ps`/`spawn`/`uptime` 走系统调用门(第 15 章、第 4 章),
+`clear`/`reboot` 各归其主。看一条命令依赖谁,就知道它的消息会经过谁。
 
 ## 两条文件命令走完 IPC 全程
 
@@ -86,11 +96,14 @@ shell 醒来  → SYS_SEND(TTY_PUTS) → tty 回显 → 你看到文件内容
 ## 本章文件
 
 ```
-apps/shell/shell.h      命令表结构、fs_req/tty_ 包装
+apps/shell/shell.h      命令表结构与全部包装的声明
 apps/shell/shell.c      REPL 主循环与分发表
 apps/shell/cmd_help.c   help
 apps/shell/cmd_fs.c     ls / cat / write
-apps/shell/cmd_sys.c    clear / reboot
+apps/shell/cmd_echo.c   echo:最小命令样板
+apps/shell/cmd_sys.c    clear / uptime / reboot
+apps/shell/cmd_proc.c   ps / spawn(第 15 章)
+apps/shell/fsio.c       fs 协议客户端包装(含 MSG_FS_ERR 应答)
 ```
 
 下一章:[构建与运行](/guide/build-and-run)。

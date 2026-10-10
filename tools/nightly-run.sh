@@ -24,6 +24,7 @@ pacing() {
     sleep 1; printf 'ls\n'
     sleep 1; printf 'cat hello.txt\n'
     sleep 1; printf 'uptime\n'
+    sleep 1; printf 'echo hello pomelo\n'
     sleep 2
 }
 
