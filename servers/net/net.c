@@ -146,15 +146,21 @@ static void net_tx(const u8 *frame, int len) {
  * (Received frames keep the 4-byte FCS unless RCTL asks otherwise, so
  * rx len is a ceiling, never an exact size; the parsers below trust the
  * header fields instead.) */
-static void pump(void) {
-    sys_irq_wait(1u << irq);
-    (void)rd(E1000_ICR);                  /* quiet the card, line falls */
+/* The rx ring, drained: every descriptor the card has filled goes to
+ * net_rx, then the tail is pushed so the card may reuse the slot. */
+static void sweep(void) {
     while (rx_ring[rx_head].status & 1) {
         net_rx(rx_bufs[rx_head], rx_ring[rx_head].len);
         rx_ring[rx_head].status = 0;
         rx_head = (rx_head + 1) % RX_DESCS;
         wr(E1000_RDT, (rx_head + RX_DESCS - 1) % RX_DESCS);
     }
+}
+
+static void pump(void) {
+    sys_irq_wait(1u << irq);
+    (void)rd(E1000_ICR);                  /* quiet the card, line falls */
+    sweep();
     sys_irq_eoi(irq);                     /* now the pic may re-arm */
 }
 
@@ -342,6 +348,7 @@ static void ip_tx(const u8 dst[4], u8 proto, const u8 *payload, int len) {
 
 static void icmp_in(const u8 *c, int len, const u8 src[4]);
 static void udp_in(const u8 *u, int len, const u8 src[4]);
+static void tcp_in(const u8 *t, int len, const u8 src[4]);
 
 /* One inbound datagram: check the envelope, then hand the payload up.
  * The header checksum is verified -- answering broken packets is the
@@ -357,6 +364,8 @@ static void ip_in(const u8 *ip, int len) {
         icmp_in(ip + ihl, total - ihl, ip + 12);
     else if (ip[9] == IP_PROTO_UDP)
         udp_in(ip + ihl, total - ihl, ip + 12);
+    else if (ip[9] == IP_PROTO_TCP)
+        tcp_in(ip + ihl, total - ihl, ip + 12);
 }
 
 /* --- icmp -------------------------------------------------------------------- */
@@ -405,16 +414,18 @@ static void ping_gw(void) {
 #define UDP_ECHO_PORT 2325
 
 /* The rfc 768 checksum covers a pseudo-header (ips, protocol, length)
- * on top of the datagram. IPv4 permits sending zero instead -- we fold
- * the real thing anyway, because a wrong-checksum datagram is exactly
- * the kind of bug that costs an afternoon to find. */
-static u16 udp_cksum(const u8 src[4], const u8 dst[4], const u8 *d, int len) {
+ * on top of the datagram; rfc 793's tcp uses the same scheme. IPv4
+ * permits sending zero for udp -- we fold the real thing anyway,
+ * because a wrong-checksum datagram is exactly the kind of bug that
+ * costs an afternoon to find. */
+static u16 pseudo_cksum(const u8 src[4], const u8 dst[4], u8 proto,
+                        const u8 *d, int len) {
     u32 s = 0;
     for (int i = 0; i < 4; i += 2)
         s += (u32)((src[i] << 8) | src[i + 1]);
     for (int i = 0; i < 4; i += 2)
         s += (u32)((dst[i] << 8) | dst[i + 1]);
-    s += IP_PROTO_UDP + (u32)len;
+    s += (u32)proto + (u32)len;
     for (int i = 0; i < len; i += 2) {
         u16 hi = d[i];
         u16 lo = (i + 1 < len) ? d[i + 1] : 0;   /* odd tail pads zero */
@@ -437,7 +448,7 @@ static void udp_tx(const u8 dst[4], u16 dport, u16 sport,
     d[4] = (u8)((8 + len) >> 8); d[5] = (u8)(8 + len);
     d[6] = 0; d[7] = 0;                   /* checksum, filled below */
     memcpy(d + 8, payload, len);
-    u16 sum = udp_cksum(ip_self, dst, d, 8 + len);
+    u16 sum = pseudo_cksum(ip_self, dst, IP_PROTO_UDP, d, 8 + len);
     d[6] = (u8)(sum >> 8);
     d[7] = (u8)sum;
     ip_tx(dst, IP_PROTO_UDP, d, 8 + len);
@@ -456,6 +467,171 @@ static void udp_in(const u8 *u, int len, const u8 src[4]) {
     int plen = ulen - 8;
     if (plen > 512) return;
     udp_tx(src, sport, UDP_ECHO_PORT, u + 8, plen);
+}
+
+/* --- tcp ---------------------------------------------------------------------- */
+
+/* The small print first: this is a minimal tcp on purpose. One port
+ * (2323, the host forwards to it with -hostfwd tcp::2323-:2323), one
+ * connection at a time, passive open only, no options. A full stack
+ * carries far more: mss and window-scale options, sack, congestion
+ * control, out-of-order receive, time_wait, randomized isn. The gaps
+ * are safe here because the peer is a test tool on the host, not the
+ * internet: segments arrive in order or the dup-ack below asks for a
+ * resend, and the isn is a constant because a classroom peer does not
+ * guess. */
+
+#define TCP_PORT 2323
+#define TCP_FIN 0x01
+#define TCP_SYN 0x02
+#define TCP_RST 0x04
+#define TCP_PSH 0x08
+#define TCP_ACK 0x10
+
+enum { TS_LISTEN, TS_SYN_RCVD, TS_ESTABLISHED };
+
+static int  ts_state;               /* which rung of the ladder */
+static u8   peer_ip[4];
+static u16  peer_port;
+static u32  rcv_nxt;                /* next byte we expect from the peer */
+static u32  iss, snd_nxt, snd_una;  /* our side: init, next, oldest-unacked */
+
+/* Retransmit: the echo segment stays parked until its ack comes home;
+ * 50 heartbeats (~0.5 s) without one, it flies again. Eight failures
+ * in a row and the connection is written off. */
+#define TCP_RETX_TICKS 50
+#define TCP_RETX_LIMIT 8
+static u8  unacked[512];
+static int unacked_len;
+static int retx_ticks, retx_count;
+
+static u32 be32(const u8 *p) {
+    return ((u32)p[0] << 24) | ((u32)p[1] << 16) | ((u32)p[2] << 8) | p[3];
+}
+
+/* One segment out. The ack field always carries rcv_nxt -- no delayed
+ * acks; the window is a fixed 8192 because every segment is processed
+ * the moment it lands. seq = snd_nxt; the caller advances it. */
+static void tcp_send(u8 flags, const u8 *payload, int len) {
+    static u8 t[20 + 512];
+    if (len > 512) return;
+    t[0] = TCP_PORT >> 8; t[1] = (u8)TCP_PORT;
+    t[2] = peer_port >> 8; t[3] = (u8)peer_port;
+    t[4] = (u8)(snd_nxt >> 24); t[5] = (u8)(snd_nxt >> 16);
+    t[6] = (u8)(snd_nxt >> 8);  t[7] = (u8)snd_nxt;
+    t[8] = (u8)(rcv_nxt >> 24); t[9] = (u8)(rcv_nxt >> 16);
+    t[10] = (u8)(rcv_nxt >> 8); t[11] = (u8)rcv_nxt;
+    t[12] = 0x50;                        /* data offset: 5 words, no options */
+    t[13] = flags;
+    t[14] = 0x20; t[15] = 0;             /* window */
+    t[16] = 0; t[17] = 0;                /* checksum, folded below */
+    t[18] = 0; t[19] = 0;                /* urgent: no */
+    if (len) memcpy(t + 20, payload, len);
+    u16 sum = pseudo_cksum(ip_self, peer_ip, IP_PROTO_TCP, t, 20 + len);
+    t[16] = (u8)(sum >> 8);
+    t[17] = (u8)sum;
+    ip_tx(peer_ip, IP_PROTO_TCP, t, 20 + len);
+}
+
+/* The heartbeat's half: a parked segment flies again until its ack
+ * lands or the retries run out and the connection is dropped. */
+static void tcp_tick(void) {
+    if (!unacked_len) return;
+    if (++retx_ticks < TCP_RETX_TICKS) return;
+    retx_ticks = 0;
+    if (++retx_count > TCP_RETX_LIMIT) {
+        ts_state = TS_LISTEN;
+        unacked_len = 0;
+        say("net: tcp gave up\n");
+        return;
+    }
+    u32 save = snd_nxt;                  /* the parked seq, not the next */
+    snd_nxt = snd_una;
+    tcp_send(TCP_ACK | TCP_PSH, unacked, unacked_len);
+    snd_nxt = save;
+}
+
+static void tcp_in(const u8 *t, int len, const u8 src[4]) {
+    if (len < 20) return;
+    u16 dport = (u16)((t[2] << 8) | t[3]);
+    if (dport != TCP_PORT) return;
+    u32 seq = be32(t + 4);
+    u32 ack = be32(t + 8);
+    u8 doff = (u8)((t[12] >> 4) * 4);
+    if (doff < 20 || doff > len) return;
+    u8 flags = t[13];
+    int plen = len - doff;
+
+    if (flags & TCP_RST) {               /* abort, whoever it is from */
+        if (ts_state != TS_LISTEN) {
+            ts_state = TS_LISTEN;
+            unacked_len = 0;
+            say("net: tcp reset\n");
+        }
+        return;
+    }
+
+    switch (ts_state) {
+    case TS_LISTEN:
+        if (!(flags & TCP_SYN)) return;
+        memcpy(peer_ip, src, 4);
+        peer_port = (u16)((t[0] << 8) | t[1]);
+        rcv_nxt = seq + 1;
+        iss = 0x50505050u;               /* 'PPPP': fixed on purpose */
+        snd_una = snd_nxt = iss;
+        tcp_send(TCP_SYN | TCP_ACK, 0, 0);
+        snd_nxt = iss + 1;               /* the syn consumed one number */
+        ts_state = TS_SYN_RCVD;
+        return;
+
+    case TS_SYN_RCVD:
+        /* The peer's ack went missing and it is asking again: same
+         * syn-ack once more. */
+        if ((flags & TCP_SYN) && seq + 1 == rcv_nxt) {
+            snd_nxt = iss;
+            tcp_send(TCP_SYN | TCP_ACK, 0, 0);
+            snd_nxt = iss + 1;
+            return;
+        }
+        if ((flags & TCP_ACK) && ack == snd_nxt) {
+            snd_una = snd_nxt;
+            ts_state = TS_ESTABLISHED;
+            say("net: tcp connected\n");
+        }
+        return;
+
+    case TS_ESTABLISHED:
+        if (plen > 0 && seq == rcv_nxt) {        /* in-order data: echo */
+            rcv_nxt += plen;
+            memcpy(unacked, t + doff, plen);
+            unacked_len = plen;
+            retx_ticks = retx_count = 0;
+            u32 save = snd_nxt;                  /* data flies from snd_una */
+            snd_nxt = snd_una;
+            tcp_send(TCP_ACK | TCP_PSH, unacked, plen);
+            snd_nxt = save + plen;
+        } else if (plen > 0 && seq + plen <= rcv_nxt) {
+            tcp_send(TCP_ACK, 0, 0);             /* old news: re-ack it */
+            return;
+        } else if (plen > 0) {                   /* a gap: beg for resend */
+            tcp_send(TCP_ACK, 0, 0);
+        }
+        if ((flags & TCP_ACK) && unacked_len && ack == snd_nxt) {
+            snd_una = snd_nxt;                   /* the echo landed */
+            unacked_len = 0;
+        }
+        /* Checked after the data, so a data+fin segment closes in one
+         * pass instead of stranding the fin behind an early return. */
+        if (flags & TCP_FIN) {
+            if (seq + plen == rcv_nxt)
+                rcv_nxt = seq + plen + 1;
+            tcp_send(TCP_ACK | TCP_FIN, 0, 0);   /* no half close: end too */
+            ts_state = TS_LISTEN;                /* released; fresh next */
+            unacked_len = 0;
+            say("net: tcp closed\n");
+        }
+        return;
+    }
 }
 
 /* --- ethernet dispatch -------------------------------------------------------- */
@@ -505,8 +681,19 @@ void net_main(void) {
     if (ping_ok)
         say_ip("net: ping ", ip_gw, " ok");
 
-    /* Then it is just the service: every pump dispatches what arrived,
-     * and the udp echo port answers whoever knocks. */
+    /* Then it is just the service. The wait mask adds the heartbeat:
+     * idle, nobody knocks, but a parked tcp segment still wants its
+     * retransmit beat, and only the timer delivers one. */
     say("net: udp echo on 2325\n");
-    for (;;) pump();
+    say("net: tcp echo on 2323\n");
+    for (;;) {
+        sys_irq_wait((1u << irq) | 1u);
+        u32 icr = rd(E1000_ICR);          /* quiet the card, line falls */
+        if (icr) {
+            sweep();                      /* the card spoke */
+        } else {
+            tcp_tick();                   /* the heartbeat spoke */
+        }
+        sys_irq_eoi(irq);
+    }
 }
