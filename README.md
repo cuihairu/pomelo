@@ -69,7 +69,11 @@ kernel/     The microkernel: interrupts, scheduling, IPC, syscalls, paging,
             service.
 servers/fs/ A file server and its tiny on-disk format (superblock + inodes).
 servers/tty/ A terminal server: kernel-delivered chars to a line buffer.
+servers/net/ An e1000 driver, a minimal arp/ip/udp/tcp stack and a socket
+            table, all in one ring 3 task.
 apps/shell/ A REPL that talks to the services over IPC (runs at ring 3).
+apps/netsh/ The net service's first customer: two echo loops and one
+            outbound greeting, driven by replies.
 tools/mkfs/ The host tool that lays out the disk image.
 docs/       The book (VitePress), one chapter per directory above.
 ```

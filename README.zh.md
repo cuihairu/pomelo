@@ -60,7 +60,11 @@ kernel/     微内核本体:中断、调度、IPC、系统调用、分页,外加
             硬件(char.c, mouse.c)。
 servers/fs/ 文件服务,以及它那套极简磁盘格式(超级块 + inode)。
 servers/tty/ 终端服务:内核送来的字符攒成行。
+servers/net/ e1000 驱动 + 最小 arp/ip/udp/tcp 栈 + socket 表,同住一个
+            ring 3 任务。
 apps/shell/ 命令行 REPL,通过 IPC 与各服务对话(跑在 ring 3)。
+apps/netsh/ 网络服务的第一个客户:两条回显回路加一句出站问候,全部由
+            回答驱动。
 tools/mkfs/ 宿主机工具,负责铺好磁盘镜像。
 docs/       教材(VitePress),一章对应上面一个目录。
 ```

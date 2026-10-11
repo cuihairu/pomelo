@@ -43,6 +43,12 @@ export default defineConfig({
           { text: '14 · 真隔离:ring3', link: '/guide/ring3' },
           { text: '15 · 倒下与爬起', link: '/guide/restart' }
         ]
+      },
+      {
+        text: '网络',
+        items: [
+          { text: '16 · 网络栈与 socket 服务', link: '/guide/net' }
+        ]
       }
     ],
     outline: [2, 3],
