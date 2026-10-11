@@ -53,21 +53,27 @@ intr_stub_14:
 
 .globl intr_common
 intr_common:
-    cli                        /* the syscall gate is a trap gate: it leaves
-                                * eflags.if open, so a tick could land in the
-                                * few instructions between dispatch and popa.
-                                * That tick would push its frame into the
-                                * register spill popa is about to read, and
-                                * this task would come back owning a register
-                                * file that no longer belongs to it -- enough
-                                * to make the final iret walk a wrong stack
-                                * and raise a protection fault at the iret.
-                                * Everything below walks the frame it is
-                                * about to pop, so it stays atomic. Hardware
-                                * lines already arrive with if=0, and the
-                                * iret restores eflags from the frame, so a
-                                * trap-gate syscall still resumes with
-                                * interrupts on */
+    cli                        /* the tail below must not depend on what a
+                                * handler left behind. the syscall gate is an
+                                * interrupt gate (0xee: type e, dpl 3), so the
+                                * cpu closes eflags.if stepping in. but the
+                                * primitives a handler sleeps on -- ipc_recv,
+                                * irq_wait -- wake their sleepers and return
+                                * with if open again: a woken driver must stay
+                                * interruptible while it pumps its inbox in
+                                * ring 3, and no task may carry a stale cli
+                                * home. so after `call intr_dispatch` returns,
+                                * if can be open, and a tick landing in the
+                                * few instructions before popa would push its
+                                * frame into the register spill popa is about
+                                * to read -- this task would come back owning
+                                * a register file that no longer belongs to
+                                * it, and the final iret would walk a wrong
+                                * stack and raise a protection fault at the
+                                * iret itself. everything below walks the
+                                * frame it is about to pop, so it stays
+                                * atomic. the iret restores eflags from the
+                                * frame, so this cli never reaches ring 3 */
     pusha                       /* edi, esi, ebp, esp, ebx, edx, ecx, eax */
     pushl %ds
     pushl %esp                  /* arg: struct regs * */
