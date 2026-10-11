@@ -65,8 +65,14 @@ static int pick_ready(void) {
 
 /* The world switches with the task: cr3 selects whose pages are real,
  * and esp0 points the CPU at this task's kernel stack for when ring 3
- * next knocks on a gate. */
+ * next knocks on a gate. Interrupts stay off from here to the return:
+ * a timer tick in the middle would nest a second sched_switch on top,
+ * and the interrupted switch's esp -- saved into the old task's seat --
+ * would end up owned by nobody. Nothing re-enables on the way back --
+ * whoever resumes here continues under switch_to's cli and only the
+ * iret (restoring the frame's own eflags) lifts it again. */
 static void sched_switch(int next) {
+    intr_disable();
     int prev = cur;
     cur = next;
     tss_esp0_set((u32)(kstacks[next] + STACK_BYTES));
@@ -127,4 +133,14 @@ void sched_enter(int first) {
     load_cr3(tasks[first].pdir ? tasks[first].pdir : (u32)kernel_pdir);
     switch_to(&tasks[0].esp, tasks[first].esp);
     panic("sched_enter returned", 0);
+}
+
+/* The frame sentinel's witness: an esp inside one of the kernel stacks
+ * names the seat a torn frame was found on. */
+int sched_seat(u32 esp) {
+    for (int i = 0; i < NTASK; i++)
+        if (esp >= (u32)kstacks[i] &&
+            esp < (u32)kstacks[i] + STACK_BYTES)
+            return i;
+    return -1;
 }

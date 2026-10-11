@@ -55,6 +55,7 @@ void sched_clock_tick(void);           /* IRQ0: count the heartbeat, then tick *
 void sched_next(void);                 /* current blocks: pick another */
 void sched_wake(int tid);
 u32  sched_uptime(void);               /* seconds since boot */
+int  sched_seat(u32 esp);              /* which kernel stack an esp lives on */
 
 /* Programs: registration and the one door every start goes through. */
 int  prog_add(const char *name, const u8 *begin, const u8 *end, u32 flags);

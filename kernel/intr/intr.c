@@ -100,6 +100,23 @@ void intr_dispatch(struct regs *r) {
     panic("unhandled exception", r);
 }
 
+/* The frame sentinel in stubs.S lands here when the cs an iret is about
+ * to pop is not one this kernel issues -- an earlier write reached an
+ * interrupt frame. The pointer is the eflags slot: the stub's int_no and
+ * err_code are already dropped, so eip is f+8 and cs is f+4. The window
+ * runs wider than the frame so its neighbours read too, and the seat
+ * names the stack a tear was found on. */
+void torn_frame(u32 *f) __attribute__((noreturn));
+void torn_frame(u32 *f) {
+    intr_disable();
+    kprintf("\nTORN FRAME at %x (seat=%d cur=%d):\n",
+            (u32)f, sched_seat((u32)f), cur);
+    for (int k = -2; k < 8; k++)
+        kprintf("  %x: %x %x %x %x\n",
+                (u32)(f + k), f[k], f[k + 1], f[k + 2], f[k + 3]);
+    for (;;) halt();
+}
+
 void panic(const char *why, struct regs *r) {
     intr_disable();
     kprintf("\nPANIC: %s", why);
