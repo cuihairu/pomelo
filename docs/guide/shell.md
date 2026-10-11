@@ -101,9 +101,10 @@ apps/shell/shell.c      REPL 主循环与分发表
 apps/shell/cmd_help.c   help
 apps/shell/cmd_fs.c     ls / cat / write
 apps/shell/cmd_echo.c   echo:最小命令样板
-apps/shell/cmd_sys.c    clear / uptime / reboot
+apps/shell/cmd_sys.c    clear / uptime / mem / reboot
 apps/shell/cmd_proc.c   ps / spawn(第 15 章)
 apps/shell/fsio.c       fs 协议客户端包装(含 MSG_FS_ERR 应答)
+apps/con.h              ring 3 写屏包装:con_write / con_clear / con_puts
 ```
 
 下一章:[构建与运行](/guide/build-and-run)。

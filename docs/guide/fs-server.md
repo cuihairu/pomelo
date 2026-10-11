@@ -117,8 +117,10 @@ kernel/sched/sched.h)——磁盘驱动和文件服务住在一起,是我们从�
 
 ```
 servers/fs/ata.c     ATA PIO 轮询读写扇区
-servers/fs/fs.c      服务循环 + ls/open/read/write 的实现
+servers/fs/fs.c      服务循环 + ls/open + 答复与拒绝
+servers/fs/fsrw.c    read/create/write/commit:三段写协议的实现
 servers/fs/fs.h      消息类型常量(FS_LS 等)
+apps/con.h           ring 3 的说话包装:con_puts 只走 sys_write
 ```
 
 下一章:[终端服务](/guide/tty-server)。

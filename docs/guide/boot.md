@@ -84,9 +84,11 @@ void kmain(u32 magic, u32 info) {
 ## 本章文件
 
 ```
-boot/boot.S     Multiboot 头 + _start
-boot/main.c     kmain:初始化硬件,拉起服务,开中断
-boot/kernel.ld  链接脚本,魔数置于文件首
+boot/boot.S          Multiboot 头 + _start
+boot/main.c          kmain:初始化硬件,拉起服务,开中断
+boot/kernel.ld       链接脚本,魔数置于文件首
+kernel/kprintf.c/.h  内核侧的 printf:kmain 的嘴
+kernel/types.h       u8/u32 这些基础类型
 ```
 
 下一章:[中断分发](/guide/interrupts)。

@@ -12,7 +12,7 @@
 内核”这件事形式化下来。[第 14 章](/guide/ring3)任务搬进 ring 3 时,这扇门
 加上 `DPL=3` 就成了用户到内核的唯一通道——接口没改,只是门上挂了锁。
 
-## 一张十一行的分发表
+## 一张十五行的分发表
 
 ```c
 enum {
@@ -27,6 +27,10 @@ enum {
     SYS_PS      = 8,   /* ebx=buf, ecx=max: 任务表快照 */
     SYS_UPTIME  = 9,   /* 开机秒数:心跳倒回来 */
     SYS_MEM     = 10,  /* ebx=&mem_info: 帧位图,数一遍 */
+    SYS_IRQ_ENABLE = 11, /* ebx=irq: 放行 PIC 脚,认领这条线 */
+    SYS_V2P     = 12,  /* ebx=va: 虚拟到物理,给 DMA 描述符用 */
+    SYS_MMIO    = 13,  /* ebx=pa: 映一页设备寄存器,返回虚拟地址 */
+    SYS_IRQ_EOI = 14,  /* ebx=irq: 重排这条自己认领的线 */
 };
 ```
 
@@ -73,6 +77,28 @@ void syscall_entry(struct regs *r) {
         frame_stats((struct mem_info *)r->ebx);
         r->eax = 0;
         return;
+    case SYS_IRQ_ENABLE:
+        /* PIC 掩码和 IDT 都是内核地盘,握着线的驱动来这里开口子。
+         * 挂上的桩是空的:唤醒人是 irq.c,设备自己的中断状态由驱动
+         * 清。认领这个动作把这条线的 EOI 从内核挪给驱动(sys_irq_eoi),
+         * 电平触发下得先让设备闭嘴再重排 8259。 */
+        pic_irq_enable(r->ebx);
+        irq_install(r->ebx, net_irq_stub);
+        irq_claim(r->ebx);
+        r->eax = 0;
+        return;
+    case SYS_IRQ_EOI:
+        /* 认领的另一半:驱动让设备闭了嘴,现在 PIC 才可以重排。内核
+         * 投递时故意跳过 EOI,就是为了把顺序留给这里的驱动。 */
+        pic_eoi(r->ebx);
+        r->eax = 0;
+        return;
+    case SYS_V2P:
+        r->eax = v2p(r->ebx);
+        return;
+    case SYS_MMIO:
+        r->eax = mmio_map(r->ebx);
+        return;
     }
     r->eax = -1;                      /* 没这个号 */
 }
@@ -100,10 +126,12 @@ static inline int sys_send(int dst, struct msg *m) {
 
 ## 一扇门,而不是一堆函数
 
-值得强调:Pomelo 的任务和内核之间**只有这十一个调用**。读文件、按键,统统
+值得强调:Pomelo 的任务和内核之间**只有这十五个调用**。读文件、按键,统统
 不经过系统调用,而是服务与服务之间的消息(走 `SYS_SEND`/`SYS_RECV`);
 `SYS_WRITE`/`SYS_CLEAR` 是仅有的例外——屏幕归内核管,任务想说话只有这一个
-出口(缘由见[第 14 章](/guide/ring3))。系统调用表越小,内核越小;内核越小,
+出口(缘由见[第 14 章](/guide/ring3))。最新的四个(11–14)是网卡驱动住进
+ring 3 时添的:开中断线、确认收讫、DMA 描述符的物理地址、设备寄存器的映射——
+驱动要的特权,内核一概不白给,一次一个门。系统调用表越小,内核越小;内核越小,
 越接近微内核的本来面目。
 
 ## 本章文件

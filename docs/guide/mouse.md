@@ -180,7 +180,7 @@ monitor 发 `mouse_move 15 6`,屏幕上的光标格必须落在预测的 `(55,18
 ```
 kernel/mouse.c         8042 握手与命令字节、IRQ12 ISR、三字节解码、消息投递
 kernel/mouse.h         声明
-kernel/vga.c           块状光标的借—还事务与屏幕内钳制
+kernel/vga.c/.h        块状光标的借—还事务与屏幕内钳制
 kernel/intr/intr.c     从属 PIC 上只开 IRQ12 这一条线
 servers/tty/tty.h      MSG_TTY_MOUSE
 servers/tty/tty.c      显式丢弃:转发与否是 tty 的决定

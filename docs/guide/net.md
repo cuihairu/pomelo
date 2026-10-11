@@ -122,5 +122,5 @@ closed`。空手也能试:不给 2324 放监听者,问候的连接重试八次�
 servers/net/net.c   e1000 驱动、ARP/IP/ICMP/UDP、最小 TCP、socket 表与消息应答
 servers/net/net.h   消息协议、e1000 寄存器、以太网与 ip 常量
 apps/netsh/netsh.c  事件循环:双回显 + 出站问候
-kernel/string.c     memmove:socket 接收缓冲的压实
+kernel/string.c/.h  memmove:socket 接收缓冲的压实
 ```
