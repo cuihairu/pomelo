@@ -61,10 +61,11 @@ CPU 自动切过来的内核栈。每任务一个内核栈,TSS 里只放当前�
 
 ## 换任务就是换世界
 
-调度器多切两样东西(kernel/sched/sched.c):
+调度器多切两样东西,外加一条铁律(kernel/sched/sched.c):
 
 ```c
 static void sched_switch(int next) {
+    intr_disable();
     int prev = cur;
     cur = next;
     tss_esp0_set((u32)(kstacks[next] + STACK_BYTES));
@@ -74,7 +75,13 @@ static void sched_switch(int next) {
 ```
 
 cr3 一换,页表就换,用户区域里 0x40000000 指向谁也跟着换——两个用户任务
-共用同一个虚拟地址而互相看不见,这正是隔离的本意。页目录怎么来?`pdir_user_new`
+共用同一个虚拟地址而互相看不见,这正是隔离的本意。铁律是开头那行
+`intr_disable`:时钟要是从切换中间插进来,它会在没切完的切换上再叠一层
+`sched_switch`,而被打断那层的 esp 已经存进旧任务的座位——从此没人认领。
+回来的路也不开中断:在这几行里被换上来的任务,接着 `switch_to` 的 `cli`
+活着,直到 `iret` 从帧里恢复自己的 EFLAGS,中断才回来。
+
+页目录怎么来?`pdir_user_new`
 (kernel/mm/paging.c)领一个目录帧、一张用户页表,把内核的四条 PDE 原样拷贝,
 再把镜像逐帧拷进用户帧。借的还是恒等映射的红利:所有帧都在低 16 MB、内核
 可见,建表和拷贝全程不用中途切 cr3。
