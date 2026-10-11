@@ -6,12 +6,14 @@
  * installed with irq_install and runs in interrupt context, so it can
  * never call sys_irq_eoi -- the kernel acks such a line on the spot. A
  * ring 3 driver claims a line through sys_irq_enable and waits on it
- * instead of polling; one waiter per line, plus one bit of memory for
- * events that arrive while nobody waits: an interrupt is never lost,
- * only parked. */
+ * instead of polling; a line sleeps a set of waiters -- one bit per
+ * seat, so two drivers sharing a line wake together instead of the
+ * second overwriting the first into a sleep nobody will ever end --
+ * plus one bit of memory for events that arrive while nobody waits:
+ * an interrupt is never lost, only parked. */
 
 static void (*handlers[16])(void);
-static u8  waiters[16];
+static u16 waiters[16];     /* per line: the seats asleep on it */
 static u16 pending;
 static u16 claimed;
 
@@ -42,14 +44,19 @@ void irq_claim(u32 irq) {
     claimed |= 1u << irq;
 }
 
-/* Called from interrupt context: wake the waiter if any, else remember. */
+/* Called from interrupt context: wake everyone asleep on the line, or,
+ * when the line has no waiters, remember the event for the next one
+ * through. sched_wake ignores seats that are not blocked, so a stale
+ * bit -- a waiter roused by mail before its irq came -- costs nothing. */
 void irq_raise(u32 irq) {
-    if (waiters[irq]) {
-        sched_wake(waiters[irq]);
-        waiters[irq] = 0;
-    } else {
+    u16 set = waiters[irq];
+    waiters[irq] = 0;
+    if (!set) {
         pending |= 1u << irq;
+        return;
     }
+    for (int t = 0; t < NTASK; t++)
+        if (set & (1u << t)) sched_wake(t);
 }
 
 /* Block until any IRQ in the mask fires. Returns early for two other
@@ -71,10 +78,17 @@ void irq_wait(u32 mask) {
             return;
         }
         for (u32 irq = 0; irq < 16; irq++)
-            if (mask & (1u << irq)) waiters[irq] = cur;
+            if (mask & (1u << irq)) waiters[irq] |= 1u << cur;
         tasks[cur].woke = 0;
         tasks[cur].state = ST_BLOCKED;
         sched_next();
+        /* The wait is over, one way or another. Our seat claims every
+         * line in the mask again only next round around, so a line that
+         * fired for another waiter cannot drag us out of a later sleep
+         * -- irq_raise clears the whole set when it fires, but the mail
+         * path leaves our bit standing. */
+        for (u32 irq = 0; irq < 16; irq++)
+            if (mask & (1u << irq)) waiters[irq] &= ~(1u << cur);
         if (tasks[cur].woke) { tasks[cur].woke = 0; intr_enable(); return; }
     }
 }
