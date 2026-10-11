@@ -12,6 +12,25 @@
 
 #define TID_NET 5
 
+/* socket protocol. The net task holds the cards and the protocol; an app
+ * that wants traffic asks by message and gets one reply message back per
+ * request. Everything below goes over ipc, and every reply reuses the
+ * fs convention: same shape, arg0 carries len or a socket, -1 is no. */
+#define MSG_NET_OPEN   1  /* arg0=proto, arg1=local port, data: dst ip[4]
+                            dst port[2]; a zero dst opens a listener */
+#define MSG_NET_ACCEPT 2  /* arg0=socket: park here until one peer lands */
+#define MSG_NET_RECV   3  /* arg0=socket, arg1=cap */
+#define MSG_NET_SEND   4  /* arg0=socket, arg1=len, data=payload */
+#define MSG_NET_CLOSE  5  /* arg0=socket */
+#define MSG_NET_ERR    6  /* any request: data=reason, the answer is no */
+#define MSG_NET_REPLY_OPEN   7  /* arg0=socket|-1 */
+#define MSG_NET_REPLY_ACCEPT 8  /* arg0=socket|-1, data: peer ip[4] port[2] */
+#define MSG_NET_REPLY_RECV   9  /* arg0=len, arg1=-1 when the peer ended,
+	                            arg2=socket -- replies name their socket,
+	                            an app juggling several needs no guesses */
+#define MSG_NET_REPLY_SEND   10 /* arg0=len sent, or -1, arg2=socket */
+#define NET_CAP 512             /* the largest segment the stack will carry */
+
 /* --- PCI configuration space ------------------------------------------ */
 #define PCI_ADDR 0xCF8
 #define PCI_DATA 0xCFC

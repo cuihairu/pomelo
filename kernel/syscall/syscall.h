@@ -12,6 +12,7 @@
 #define TID_SHELL  3
 #define TID_PROBE  4
 #define TID_NET    5
+#define TID_NETSH  6
 
 enum {
     SYS_YIELD    = 0,   /* give up the rest of this time slice */
