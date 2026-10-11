@@ -157,7 +157,7 @@ tty,见[第 9 章](/guide/tty-server)。)
 kernel/intr/intr.h     IRQ 原语与 regs 结构
 kernel/intr/idt.c      IDT 填充与加载
 kernel/intr/stubs.S    实际使用的向量各一个桩
-kernel/intr/intr.c     pic_remap / pit_init / intr_dispatch / panic
+kernel/intr/intr.c     pic_remap / pit_init / intr_dispatch / torn_frame / panic
 kernel/intr/irq.c      认领表、等待者集合、待决位与 irq_wait
 ```
 
