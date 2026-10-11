@@ -10,13 +10,21 @@
 
 ## 注册表:能力清单,不是地址簿
 
-内核镜像里嵌着四个 blob。启动时 `boot/main.c` 把它们登记进一张表:
+内核镜像里嵌着六个 blob。启动时 `boot/main.c` 把它们登记进一张表:
 
 ```c
-prog_add("fs",    _binary_ufs_bin_start,    _binary_ufs_bin_end,    EFLAGS_USER_IOPL);
-prog_add("tty",   _binary_utty_bin_start,   _binary_utty_bin_end,   EFLAGS_USER);
-prog_add("shell", _binary_ushell_bin_start, _binary_ushell_bin_end, EFLAGS_USER);
-prog_add("probe", _binary_uprobe_bin_start, _binary_uprobe_bin_end, EFLAGS_USER);
+prog_add("fs",    _binary_ufs_bin_start,    _binary_ufs_bin_end,
+         EFLAGS_USER_IOPL);     /* the ata driver needs port rights */
+prog_add("tty",   _binary_utty_bin_start,   _binary_utty_bin_end,
+         EFLAGS_USER);
+prog_add("shell", _binary_ushell_bin_start, _binary_ushell_bin_end,
+         EFLAGS_USER);
+prog_add("probe", _binary_uprobe_bin_start, _binary_uprobe_bin_end,
+         EFLAGS_USER);          /* born to crash, revivable by hand */
+prog_add("net",   _binary_unet_bin_start,   _binary_unet_bin_end,
+         EFLAGS_USER_IOPL);     /* pci config + e1000 mmio need ports */
+prog_add("netsh", _binary_unetsh_bin_start, _binary_unetsh_bin_end,
+         EFLAGS_USER);          /* the net service's first customer */
 ```
 
 这张表是**能力清单**:任务只能按名字请内核启动一个已注册的程序——给的是词,
@@ -64,11 +72,13 @@ tid program  state
  2 tty      blocked
  3 shell    ready
  4 probe    free
- 5 -        free
+ 5 net      blocked
+ 6 netsh    blocked
+ 7 -        free
 pomelo> spawn probe
+task 4 killed: page fault at 101000 (eip=40000055)
 probe is task 4 now
 pomelo> probe: alive at ring 3
-pomelo> task 4 killed: page fault at 101000 (eip=40000055)
 ```
 
 看这一屏:fs 和 tty 都 `blocked`——它们在 `sys_recv` 上睡大觉,等消息上门;
