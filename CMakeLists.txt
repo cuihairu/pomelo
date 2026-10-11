@@ -133,4 +133,9 @@ add_test(NAME smoke-mouse
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-mouse.sh
             ${QEMU} ${KERNEL_ELF} ${IMG} smoke-mouse.log)
-set_tests_properties(smoke smoke-ps2 smoke-mouse PROPERTIES TIMEOUT 120)
+add_test(NAME smoke-net
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-net.sh
+            ${QEMU} ${KERNEL_ELF} ${IMG} smoke-net.log)
+set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net
+    PROPERTIES TIMEOUT 120)
