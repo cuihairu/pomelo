@@ -14,6 +14,11 @@ struct msg {
     int arg0, arg1, arg2; /* 三个参数,具体含义由 type 约定 */
     char data[56];        /* 一小段随行数据,如文件名 */
 };
+
+struct msgq {
+    struct msg buf[16];   /* MSGQ_CAP:定长队列,够 shell 一轮输出 */
+    int head, count;
+};
 ```
 
 定长消息省掉了内存分配和生命周期管理,是一大简化。代价是传大块数据得**分多次**——
