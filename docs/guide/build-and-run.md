@@ -76,6 +76,13 @@ QEMU 的 `sendkey` 在模拟 PS/2 键盘上敲一个 `mem`,再从 `0xb8000` 的 
 `tools/smoke-mouse.sh` 把同一套取证搬到 PS/2 鼠标上:monitor 发
 `mouse_move` / `mouse_button`,验的是光标格的属性字节(`0x70` 是光标,
 `0x07` 是它离开后还原的格子)。
+`tools/smoke-net.sh` 轮到网络:它自己开一台带 `hostfwd` 的 QEMU(宿主机的
+2323/2325 进得来),先在宿主机上竖起一只 `nc -l -p 2324` 的耳朵(openbsd
+变体,`-N` 发完即半关,不然回显等不来 EOF),再验四样——两条 TCP 回显,
+第二条专门压“连接结束、重开监听”的变身路;一条 UDP 回显;问候语真的到了
+宿主机;两条 TCP 各数到一次 `peer closed`。这只耳朵也是血泪:上一轮失败
+残留的 `nc` 会把下一轮的问候抢走,于是 trap 里 QEMU 和耳朵同生共死——
+清理自己,是测试的一部分。
 
 ## nightly:每晚真跑一遍
 
@@ -152,6 +159,7 @@ tools/smoke.sh         QEMU 冒烟测试:串口驱动 shell,grep 验证
 tools/walkthrough.sh   实机走查:完整命令电池 + write/ls/cat 往返,逐条判分
 tools/smoke-ps2.sh     QEMU 冒烟测试:PS/2 键盘输入,VGA 文本缓冲取证
 tools/smoke-mouse.sh   QEMU 冒烟测试:PS/2 鼠标事件,VGA 属性字节取证
+tools/smoke-net.sh     QEMU 冒烟测试:hostfwd 进出,socket 服务对 nc 说话
 tools/nightly-run.sh   nightly 取证:双开机,串口记录 + screendump
 tools/mkiso.sh         把内核打成 BIOS 可引导的 ISO(grub multiboot)
 boot/kernel.ld         链接脚本
