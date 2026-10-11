@@ -542,11 +542,15 @@ static struct sock *sock_by_port(u8 proto, u16 dport) {
     return 0;
 }
 
+/* The refusal names the request that was refused: with several opens and
+ * recvs in flight, a bare "no" cannot be traced back to its caller. */
 static void refuse(const struct msg *req, const char *why) {
     struct msg r;
     memset(&r, 0, sizeof r);
     r.type = MSG_NET_ERR;
     r.arg0 = -1;
+    r.arg1 = req->type;
+    r.arg2 = (req->type == MSG_NET_OPEN) ? -1 : req->arg0;
     for (int i = 0; why[i] && i < MSG_DATA - 1; i++)
         r.data[i] = why[i];
     sys_send_wait(req->src, &r);

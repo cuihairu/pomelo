@@ -144,11 +144,19 @@ static void handle(struct msg *m) {
         }
         break;
 
-    case MSG_NET_ERR:
+    case MSG_NET_ERR: {
+        /* no sprintf in this world: one digit per kind, so a refusal
+         * shows the request that was refused (t) and its socket (s) */
+        char id[3] = { (char)('0' + (m->arg1 & 0xF)),
+                       (char)(m->arg2 < 0 ? '-' : '0' + (m->arg2 & 0xF)),
+                       0 };
         note("netsh: net says no: ");
         note((const char *)m->data);
-        note("\n");
+        note(" (t=");
+        note(id);
+        note(")\n");
         break;
+    }
     }
 }
 
