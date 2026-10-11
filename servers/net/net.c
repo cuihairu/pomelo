@@ -90,7 +90,6 @@ static void say_ip(const char *pre, const u8 ip[4], const char *post) {
 }
 
 /* "52:55:0a:00:02:02\n" -- the colon form, with its own newline. */
-/* "52:55:0a:00:02:02\n" -- the colon form, with its own newline. */
 static void say_mac(const u8 m[6]) {
     char line[20];
     int p = 0;
