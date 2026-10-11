@@ -67,12 +67,14 @@ if (!s->unacked_len) {           /* only a parked close remains */
 | RECV | socket、上限 | arg0=长度,arg1=-1 表对端结束 |
 | SEND | socket、长度、数据 | arg0=已发长度 |
 | CLOSE | socket | 无回答 |
+| ERR | (不是请求,是拒信) | arg1=被拒的请求,arg2=socket,data=理由 |
 
-每条请求一个回答,沿用 fs 的旧约:同型,arg0 带数,负数是否。两条新约
+每条请求一个回答,沿用 fs 的旧约:同型,arg0 带数,负数是否。三条新约
 是这一章逼出来的:OPEN 的回答带 arg1(本地端口),因为一个 app 会同时
 开几个 socket,答案回来不分先后,**得让答案自己说清是哪个**;RECV 和
 SEND 的回答带 arg2(socket 号),理由相同——答案先到,请求的名字早忘了,
-猜是要出事的。
+猜是要出事的;拒信也一样,arg1 带上被拒的请求,arg2 带上它的 socket——
+一封光秃秃的"no"落进正忙的事件循环,没有名字就无从追起。
 
 RECV 和 ACCEPT 没有"没数据,过会儿再问"的返回:调用者连消息一起睡在
 socket 上,流量到了才被唤醒。park 的写法和内核的 irq 等待队列同款——
@@ -80,8 +82,10 @@ socket 上,流量到了才被唤醒。park 的写法和内核的 irq 等待队�
 没有超时:对端不来,调用者就一直睡。这个缺口是故意留的,注释里写着。
 
 主动打开只认网关。`ip_tx` 的 ARP 表里只有一个名字,发给别人的包会
-无声无息地消失,所以 OPEN 收到网关以外的地址直接拒绝,拒绝理由原样
-送到:"only the gateway is reachable"。**限制被说出来,才是限制;
+无声无息地消失,所以 OPEN 收到网关以外的地址直接拒绝,拒信把理由原样
+带来,netsh 打出来是
+`net says no: open: only the gateway is reachable (t=1-)`,`t=` 后面
+是被拒请求(OPEN=1)和它的 socket。**限制被说出来,才是限制;
 藏起来,是坑。**
 
 ## netsh:第一个客户
