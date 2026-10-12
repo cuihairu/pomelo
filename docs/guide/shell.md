@@ -4,7 +4,7 @@
 
 ## 最小的 REPL
 
-shell 是全书代码最少的一章,却是前面所有机制的**总装车间**:
+shell 自己几乎不携带新机制,却是前面所有机制的**总装车间**:
 
 ```c
 void shell_main(void) {
@@ -38,6 +38,7 @@ static const struct cmd cmds[] = {
     { "ps",     cmd_ps     },
     { "spawn",  cmd_spawn  },
     { "uptime", cmd_uptime },
+    { "mem",    cmd_mem    },
     { "reboot", cmd_reboot },
     { 0, 0 }
 };
@@ -49,7 +50,7 @@ static const struct cmd cmds[] = {
 
 `echo` 就是这条规则的最小样板(`cmd_echo.c`):不碰 fs、不碰内核,把 `argv`
 借 tty 说出去就完事——想加自己的命令,照抄它起步。其余命令各按依赖落座:
-`ls`/`cat`/`write` 走 fs,`ps`/`spawn`/`uptime` 走系统调用门(第 15 章、第 4 章),
+`ls`/`cat`/`write` 走 fs,`ps`/`spawn`/`uptime`/`mem` 走系统调用门(第 15 章、第 4 章),
 `clear`/`reboot` 各归其主。看一条命令依赖谁,就知道它的消息会经过谁。
 
 ## 两条文件命令走完 IPC 全程
@@ -58,12 +59,17 @@ static const struct cmd cmds[] = {
 
 ```c
 void cmd_cat(int argc, char **argv) {
-    if (argc < 2) { tty_puts("usage: cat <file>\n"); return; }
-
+    if (argc < 2) {
+        tty_puts("usage: cat <file>\n");
+        return;
+    }
     int size;
     int ino = fs_open(argv[1], &size);        /* 问 fs:有这文件吗 */
-    if (ino < 0) { tty_puts("no such file\n"); return; }
-
+    if (ino == FS_REFUSED) return;         /* the reason is already printed */
+    if (ino < 0) {
+        tty_puts("no such file\n");
+        return;
+    }
     char buf[MSG_DATA];
     for (int off = 0; off < size; ) {
         int n = fs_read(ino, off, buf);       /* 分批取数据 */
@@ -83,8 +89,8 @@ void cmd_cat(int argc, char **argv) {
 以 `cat hello.txt` 为例,从指尖到磁盘:
 
 ```
-敲键        → IRQ1 → kernel/intr 桩 → irq_raise(1)
-            → tty 任务被 irq_wait 唤醒 → 攒行 → 回 TTY_GETLINE
+敲键        → IRQ1 → kernel/intr 桩 → kbd_isr(kernel/char.c)
+            → TTY_CHAR 消息唤醒 tty → 攒行 → 回 TTY_GETLINE
 shell 醒来  → run("cat hello.txt") → cmd_cat
             → SYS_SEND(FS_OPEN) → int 0x80 → syscall 门 → ipc_send
 fs 醒来     → 查 inode 表 → ata_read(超级块、inode、数据块) → 回消息
