@@ -12,11 +12,11 @@ struct msg {
     int src;              /* 谁发的,内核代填 */
     int type;             /* 请求类型:FS_READ / TTY_GETLINE ... */
     int arg0, arg1, arg2; /* 三个参数,具体含义由 type 约定 */
-    char data[56];        /* 一小段随行数据,如文件名 */
+    char data[MSG_DATA];  /* 56 字节随行数据,如文件名 */
 };
 
 struct msgq {
-    struct msg buf[16];   /* MSGQ_CAP:定长队列,够 shell 一轮输出 */
+    struct msg buf[MSGQ_CAP];  /* 16 条:定长队列,够 shell 一轮输出 */
     int head, count;
 };
 ```
@@ -29,7 +29,7 @@ struct msgq {
 消息队列挂在任务自己身上(`struct task.inbox`),内核只提供投递和领取:
 
 ```c
-int ipc_send(int dst, struct msg *m) {
+static int enqueue(int dst, struct msg *m, int src) {
     if (dst < 1 || dst >= NTASK) return -1;
     intr_disable();                       /* 入队+唤醒保持原子 */
     struct msgq *q = &tasks[dst].inbox;
@@ -38,11 +38,15 @@ int ipc_send(int dst, struct msg *m) {
         return -1;                        /* 队列满,先返回失败 */
     }
     *slot(q, q->count) = *m;              /* slot:head 起第 i 个槽位 */
-    slot(q, q->count)->src = cur;
+    slot(q, q->count)->src = src;
     q->count++;
     intr_enable();
     sched_wake(dst);                      /* 收件人可能正等着,叫醒它 */
     return 0;
+}
+
+int ipc_send(int dst, struct msg *m) {
+    return enqueue(dst, m, cur);          /* 任务寄的信,src=发件人 */
 }
 
 int ipc_recv(struct msg *out, int block) {
@@ -56,16 +60,21 @@ int ipc_recv(struct msg *out, int block) {
             intr_enable();
             return 0;
         }
-        if (!block) { intr_enable(); return -1; }
+        if (!block) {
+            intr_enable();
+            return -1;
+        }
         tasks[cur].state = ST_BLOCKED;    /* 睡,直到有人发消息 */
         sched_next();
     }
 }
 ```
 
-两段各有讲究:`ipc_send` 把“入队+唤醒”整个关在关中断的临界区里——投递到一半
+两段各有讲究:`enqueue` 把“入队+唤醒”整个关在关中断的临界区里——投递到一半
 被时钟打断,消息会处于半截状态;`ipc_recv` 的**循环检查**则是并发课的经典陷阱:
-被唤醒不代表一定有消息,写成 `if` 会偶发地拿到空答案。
+被唤醒不代表一定有消息,写成 `if` 会偶发地拿到空答案。内核自己也要寄信
+(中断投给 tty 的字符、鼠标样本),走 `ipc_send_kernel`——同一个 `enqueue`,
+落款 `src=0`,"这封信不是任何任务写的"。
 
 ## 一次 shell 读文件,消息如何往返
 
