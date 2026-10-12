@@ -25,12 +25,25 @@ netargs="-netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0
   sleep 2; } | timeout 20 "$qemu" -kernel "$kernel" -hda "$img" \
       -serial stdio -display none -no-reboot $netargs > "$out" 2>&1
 
-grep -q 'hello from the pomelo disk' "$out"
-grep -q 'hello pomelo' "$out"
-grep -Eq 'frames: [0-9]+ of [0-9]+ free' "$out"
+fail=0
+check() { grep -Eq "$2" "$out" || { echo "FAIL: $1"; fail=1; }; }
+
+check 'boot banner never appeared' 'pomelo booting'
+check 'shell never spoke'          'pomelo shell'
+check 'e1000 never came up'        'net: e1000 up'
+check 'netsh never announced a listener' 'netsh: tcp echo on 2323'
+check 'ls never listed the seeds'  'hello.txt'
+check 'cat never answered'         'hello from the pomelo disk'
+check 'echo never came back'       'hello pomelo'
+check 'mem never answered'         'frames: [0-9]+ of [0-9]+ free'
+check 'spawn did not revive probe' 'probe is task 4 now'
+check 'uptime never answered'      'up [0-9]+s'
 # the ring 3 probe: alive, then rightly killed for touching kernel memory;
 # then the shell revives it by name, and it dies all over again
-grep -q 'probe is task 4 now' "$out"
-grep -Eq 'up [0-9]+s' "$out"
-[ "$(grep -c 'probe: alive at ring 3' "$out")" = 2 ]
-[ "$(grep -c 'killed: page fault' "$out")" = 2 ]
+[ "$(grep -c 'probe: alive at ring 3' "$out")" = 2 ] \
+    || { echo 'FAIL: probe never spoke twice'; fail=1; }
+[ "$(grep -c 'killed: page fault' "$out")" = 2 ] \
+    || { echo 'FAIL: probe was not killed twice'; fail=1; }
+
+[ "$fail" = 0 ] && echo "smoke ok: $out"
+exit $fail
