@@ -63,6 +63,7 @@ else
     check 'disk read failed'     'hello from the pomelo disk'
     check 'write never answered' 'wrote 18 bytes to walk.txt'
     check 'cat of a new file never answered' '^hello walkthrough$'
+    check 'ls never listed the new file' 'walk.txt'
 fi
 
 [ "$fail" = 0 ] && echo "walkthrough ok: $out"
