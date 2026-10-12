@@ -56,7 +56,7 @@ void kmain(u32 magic, u32 info) {
     paging_init();              /* identity map on: addresses unchanged */
     kprintf("paging on: low 16m identity\n");
 
-    servers_start();            /* fs, tty, shell, probe, all in ring 3 */
+    servers_start();            /* fs, tty, shell, probe, net, netsh: ring 3 */
 
     intr_enable();              /* only now may interrupts fire */
     sched_enter(TID_FS);        /* kmain hands the stage to the services */
