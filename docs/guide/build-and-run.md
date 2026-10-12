@@ -61,7 +61,8 @@ qemu-system-i386 -kernel build/kernel -hda build/pomelo.img -serial stdio
 构建产物对不对,QEMU 说了算。`tools/smoke.sh` 开一台无显示的 QEMU,从串口
 替你敲一串命令(`help`、`ps`、`spawn probe`、`ls`、`cat hello.txt`、`uptime`、
 `echo`、`mem`),然后逐条判分——启动横幅、e1000 上线、netsh 的监听通告、
-每条命令的答复、probe 的两死两生,任何一处不对,整轮就算失败;
+每条命令的答复、help 清单与命令表的对表、probe 的两死两生,
+任何一处不对,整轮就算失败;
 `tools/walkthrough.sh` 走得更远——
 多一整套 `write`/`ls`/`cat` 的新建文件往返,是 nightly 每晚跑的那份完整走查:
 
@@ -90,16 +91,15 @@ QEMU 的 `sendkey` 在模拟 PS/2 键盘上敲一个 `mem`,再从 `0xb8000` 的 
 
 冒烟测试只跑 `pc`。仓库的 [nightly workflow](
 https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)每晚做一轮更
-完整的取证:构建内核、镜像和 ISO,然后在 QEMU 里开机两次——一次跑
-`tools/walkthrough.sh` 走完整命令电池、抓串口记录,一次用 monitor 的
-`screendump` 抓启动画面——把 ISO、内核、磁盘镜像、`serial.log` 和 `boot.png`
-挂到 rolling 的 [nightly release](
+完整的取证:构建内核、镜像和 ISO,然后 **q35 与 pc 两台机器各开机取证一遍**——
+先跑 `tools/walkthrough.sh` 走完整命令电池、抓串口记录,再用 monitor 的
+`screendump` 抓启动画面——把 ISO、内核、磁盘镜像,连同两台机器各自的
+`serial.log` 和 `boot.png`,一起挂到 rolling 的 [nightly release](
 https://github.com/cuihairu/pomelo/releases/tag/nightly)。触发方式有两种:每晚
-定时,或手动 `workflow_dispatch`,附带机型选择(`q35` / `pc`,默认 `q35`)和
-可选的附加 QEMU 参数(例如 `-d int` 看中断)。取证脚本是 `tools/nightly-run.sh`,
-判绿口径写在文件头:q35 允许只过 shell 检查,挂死一律算失败;**走查的判决就是
-当晚的判决**——walkthrough 判分不过,nightly-run 以失败退出,刷 release 的
-一步根本不会执行。
+定时,或手动 `workflow_dispatch`(可选附加 QEMU 参数,例如 `-d int` 看中断)。
+取证脚本是 `tools/nightly-run.sh`,判绿口径写在文件头:q35 允许只过 shell 检查,
+挂死一律算失败;**走查的判决就是当晚的判决**——walkthrough 判分不过,
+nightly-run 以失败退出,两臂不齐绿,刷 release 的一步根本不会执行。
 
 ## 交叉编译?不,本机编译就够
 
