@@ -60,7 +60,9 @@ qemu-system-i386 -kernel build/kernel -hda build/pomelo.img -serial stdio
 
 构建产物对不对,QEMU 说了算。`tools/smoke.sh` 开一台无显示的 QEMU,从串口
 替你敲一串命令(`help`、`ps`、`spawn probe`、`ls`、`cat hello.txt`、`uptime`、
-`echo`、`mem`),然后 grep 期望的输出;`tools/walkthrough.sh` 走得更远——
+`echo`、`mem`),然后逐条判分——启动横幅、e1000 上线、netsh 的监听通告、
+每条命令的答复、probe 的两死两生,任何一处不对,整轮就算失败;
+`tools/walkthrough.sh` 走得更远——
 多一整套 `write`/`ls`/`cat` 的新建文件往返,是 nightly 每晚跑的那份完整走查:
 
 ```sh
@@ -95,7 +97,9 @@ https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)每晚做一轮
 https://github.com/cuihairu/pomelo/releases/tag/nightly)。触发方式有两种:每晚
 定时,或手动 `workflow_dispatch`,附带机型选择(`q35` / `pc`,默认 `q35`)和
 可选的附加 QEMU 参数(例如 `-d int` 看中断)。取证脚本是 `tools/nightly-run.sh`,
-判绿口径写在文件头:q35 允许只过 shell 检查,挂死一律算失败。
+判绿口径写在文件头:q35 允许只过 shell 检查,挂死一律算失败;**走查的判决就是
+当晚的判决**——walkthrough 判分不过,nightly-run 以失败退出,刷 release 的
+一步根本不会执行。
 
 ## 交叉编译?不,本机编译就够
 
