@@ -39,10 +39,10 @@ inode(index node)记录“这个文件占哪些块、有多大”。我们的 in
 
 ```c
 struct inode {
-    u32 used;           /* 0 = 空闲槽位 */
-    char name[12];      /* 文件名,定长省事 */
-    u32 size;           /* 字节数 */
-    u32 direct[6];      /* 直接块指针:6 个 LBA 号 */
+    u32 used;            /* 0 = 空闲槽位 */
+    char name[NAMELEN];  /* 12 字节,文件名定长省事 */
+    u32 size;            /* 字节数 */
+    u32 direct[NDIRECT]; /* 6 个直接块指针:6 个 LBA 号 */
     u8  pad[64 - 4 - NAMELEN - 4 - NDIRECT * 4];   /* 凑满 64 字节 */
 };
 ```
