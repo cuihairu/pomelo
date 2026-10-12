@@ -2,12 +2,13 @@
 #
 # The release is rolling: the `nightly` tag is deleted and recreated each
 # run, so there is exactly one nightly release at any time. Everything it
-# ships (iso, kernel, disk image, serial log, boot screenshot) is rebuilt
+# ships (iso, kernel, disk image, serial logs, boot screenshots) is rebuilt
 # from that day's main; nothing is cached between runs.
 #
-# Machine choice matters for the disk: `pc` has legacy IDE so ls/cat work;
-# `q35` wires its disk through AHCI and the fs service parks with a note
-# (see tools/nightly-run.sh). Both outcomes are green; a hang is not.
+# Both machines run every time: `pc` has legacy IDE so ls/cat work; `q35`
+# wires its disk through AHCI and the fs service parks with a note. Both
+# outcomes are green; a hang is not. The release job waits for both legs
+# and publishes only if every check passed.
 
 name: nightly
 
@@ -16,13 +17,6 @@ on:
     - cron: '37 21 * * *'
   workflow_dispatch:
     inputs:
-      machine:
-        description: QEMU machine type
-        type: choice
-        default: q35
-        options:
-          - q35
-          - pc
       qemu_extra:
         description: extra qemu args, e.g. "-d int" to watch interrupts
         required: false
@@ -34,8 +28,9 @@ permissions:
 jobs:
   nightly:
     runs-on: ubuntu-latest
-    env:
-      MACHINE: ${{ inputs.machine || 'q35' }}
+    strategy:
+      matrix:
+        machine: [q35, pc]
     steps:
       - uses: actions/checkout@v4
 
@@ -57,21 +52,33 @@ jobs:
 
       - name: boot in qemu and collect evidence
         run: |
-          sh tools/nightly-run.sh qemu-system-x86_64 "$MACHINE" \
-              build/kernel build/pomelo.img nightly-output \
+          sh tools/nightly-run.sh qemu-system-x86_64 "${{ matrix.machine }}" \
+              build/kernel build/pomelo.img \
+              "nightly-output-${{ matrix.machine }}" \
               ${{ inputs.qemu_extra }}
 
       - name: upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: nightly-${{ env.MACHINE }}
+          name: nightly-${{ matrix.machine }}
           path: |
-            nightly-output/serial.log
-            nightly-output/boot.png
+            nightly-output-${{ matrix.machine }}/serial.log
+            nightly-output-${{ matrix.machine }}/boot.png
             build/pomelo.iso
             build/kernel
             build/pomelo.img
           retention-days: 14
+
+  release:
+    needs: nightly
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: download the evidence from both machines
+        uses: actions/download-artifact@v4
+        with:
+          pattern: nightly-*
+          path: artifacts
 
       - name: refresh the rolling nightly release
         env:
@@ -80,17 +87,22 @@ jobs:
           date=$(date -u +%F)
           short=${GITHUB_SHA:0:7}
           cat > nightly-notes.md <<EOF
-          booted in qemu (-M $MACHINE) at commit $short.
+          booted in qemu on both machines at commit $short.
 
           try it:
-              qemu-system-x86_64 -M pc -kernel kernel -hda pomelo.img -serial stdio
+              qemu-system-i386 -M pc -kernel kernel -hda pomelo.img -serial stdio
 
           q35 note: the disk sits behind ahci, so the fs service parks with
-          a no-disk note; pick machine=pc for the full disk battery.
+          a no-disk note; pick -M pc for the full disk battery.
           EOF
           gh release delete nightly --yes --cleanup-tag || true
           gh release create nightly \
               --title "nightly $date" \
               --notes-file nightly-notes.md \
-              build/pomelo.iso build/kernel build/pomelo.img \
-              nightly-output/serial.log nightly-output/boot.png
+              artifacts/nightly-q35/pomelo.iso \
+              artifacts/nightly-q35/kernel \
+              artifacts/nightly-q35/pomelo.img \
+              artifacts/nightly-q35/serial.log \
+              artifacts/nightly-q35/boot.png \
+              artifacts/nightly-pc/serial.log \
+              artifacts/nightly-pc/boot.png
