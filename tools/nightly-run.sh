@@ -35,8 +35,11 @@ pacing() {
 }
 
 # --- run 1: the walkthrough battery over the serial port -----------------
+# its verdict is the whole run's verdict: it is kept for the end, after
+# run two has collected its evidence
+walk=0
 sh "$SCRIPT_DIR/walkthrough.sh" "$qemu" "$kernel" "$img" "$out/serial.log" \
-    -M "$mach" "$@"
+    -M "$mach" "$@" || walk=1
 
 # --- run 2: screendump of the boot screen --------------------------------
 rm -f "$out/monitor.sock" "$out/boot.ppm"
@@ -63,4 +66,5 @@ if command -v convert > /dev/null; then
 else
     mv "$out/boot.ppm" "$out/boot.png"   # keep the evidence, ugly or not
 fi
+[ "$walk" = 0 ] || { echo "FAIL: the walkthrough battery failed"; exit 1; }
 echo "nightly run ok: $out/serial.log + $out/boot.png"
