@@ -9,7 +9,8 @@ CPU 复位后停在实模式,BIOS 做完自检,把控制权交给引导器。我
 Multiboot 头的 ELF 文件,自己充当引导器:把内核载入内存,切到保护模式,
 再跳到我们指定的入口。
 
-这个约定只需要内核开头有 8 个字节的魔数和对齐。看 `boot/boot.S`:
+这个约定只需要内核开头 12 个字节(魔数、标志、校验和各一个长字)外加 4 字节
+对齐。看 `boot/boot.S`:
 
 ```asm
 .set MB_MAGIC, 0x1BADB002
@@ -58,11 +59,12 @@ void kmain(u32 magic, u32 info) {
     pic_remap();                /* IRQs to vectors 32..47 */
     pit_init(HZ);               /* 100 Hz: the scheduler's heartbeat */
     char_init();                /* console ISRs feed the tty by message */
+    mouse_init();               /* the other 8042 device: probe, then irq12 */
 
     paging_init();              /* identity map on: addresses unchanged */
     kprintf("paging on: low 16m identity\n");
 
-    servers_start();            /* fs, tty, shell, probe as runnable tasks */
+    servers_start();            /* fs, tty, shell, probe, net, netsh: ring 3 */
 
     intr_enable();              /* only now may interrupts fire */
     sched_enter(TID_FS);        /* kmain hands the stage to the services */
@@ -87,6 +89,7 @@ void kmain(u32 magic, u32 info) {
 boot/boot.S          Multiboot 头 + _start
 boot/main.c          kmain:初始化硬件,拉起服务,开中断
 boot/kernel.ld       链接脚本,魔数置于文件首
+boot/gdt.c/.h        全局描述符表:内核段与 TSS(第 14 章)
 kernel/kprintf.c/.h  内核侧的 printf:kmain 的嘴
 kernel/types.h       u8/u32 这些基础类型
 ```
