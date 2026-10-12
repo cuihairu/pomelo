@@ -38,6 +38,13 @@ check 'echo never came back'       'hello pomelo'
 check 'mem never answered'         'frames: [0-9]+ of [0-9]+ free'
 check 'spawn did not revive probe' 'probe is task 4 now'
 check 'uptime never answered'      'up [0-9]+s'
+# help's listing must match the table in shell.c, both directions: a
+# command added to one and forgotten in the other is a shell that lies
+root=$(cd "$(dirname "$0")/.." && pwd)
+tbl=$(sed -n 's/^    { "\([a-z]*\)".*/\1/p' "$root/apps/shell/shell.c" | sort)
+listed=$(grep -Eo '^  [a-z]+' "$out" | awk '{print $1}' | sort -u)
+[ "$tbl" = "$listed" ] \
+    || { echo 'FAIL: help listing does not match the command table'; fail=1; }
 # the ring 3 probe: alive, then rightly killed for touching kernel memory;
 # then the shell revives it by name, and it dies all over again
 [ "$(grep -c 'probe: alive at ring 3' "$out")" = 2 ] \
