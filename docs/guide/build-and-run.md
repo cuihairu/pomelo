@@ -130,10 +130,13 @@ target_compile_options(kernel PRIVATE
 构建时 CMake 先编 mkfs、再跑它生成镜像,顺序依赖写在同一条命令里:
 
 ```cmake
-add_custom_command(OUTPUT pomelo.img
-    COMMAND mkfs pomelo.img ${CMAKE_SOURCE_DIR}/tools/mkfs/seed
+add_custom_command(OUTPUT ${IMG}
+    COMMAND $<TARGET_FILE:mkfs> ${IMG} ${CMAKE_SOURCE_DIR}/tools/mkfs/seed
     DEPENDS mkfs)
 ```
+
+(`${IMG}` 就是 `build/pomelo.img`;`$<TARGET_FILE:…>` 是 CMake 的生成器
+表达式,展开成 mkfs 编译产物的真实路径——引用目标,不写死路径。)
 
 ## 为什么镜像和内核是两个文件
 
