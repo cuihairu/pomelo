@@ -94,12 +94,15 @@ https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)每晚做一轮
 完整的取证:构建内核、镜像和 ISO,然后 **q35 与 pc 两台机器各开机取证一遍**——
 先跑 `tools/walkthrough.sh` 走完整命令电池、抓串口记录,再用 monitor 的
 `screendump` 抓启动画面——把 ISO、内核、磁盘镜像,连同两台机器各自的
-`serial.log` 和 `boot.png`,一起挂到 rolling 的 [nightly release](
-https://github.com/cuihairu/pomelo/releases/tag/nightly)。触发方式有两种:每晚
-定时,或手动 `workflow_dispatch`(可选附加 QEMU 参数,例如 `-d int` 看中断)。
-取证脚本是 `tools/nightly-run.sh`,判绿口径写在文件头:q35 允许只过 shell 检查,
-挂死一律算失败;**走查的判决就是当晚的判决**——walkthrough 判分不过,
-nightly-run 以失败退出,两臂不齐绿,刷 release 的一步根本不会执行。
+`serial-q35.log`、`boot-q35.png`、`serial-pc.log`、`boot-pc.png`,一起挂到
+rolling 的 [nightly release](
+https://github.com/cuihairu/pomelo/releases/tag/nightly)。产物名必须带机器号:
+同一条上传里出现两个同名资产,GitHub 直接 422。触发方式有两种:每晚定时,或
+手动 `workflow_dispatch`(可选附加 QEMU 参数,例如 `-d int` 看中断)。
+取证脚本是 `tools/nightly-run.sh`,机型差异的判绿口径写在文件头,q35 允许只过
+shell 检查,挂死一律算失败;走查的判决写在脚本末段:**走查的判决就是当晚的
+判决**——walkthrough 判分不过,nightly-run 以失败退出,两臂不齐绿,刷 release 的
+一步根本不会执行。
 
 ## 交叉编译?不,本机编译就够
 

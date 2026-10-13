@@ -76,8 +76,8 @@ docs/       教材(VitePress),一章对应上面一个目录。
 完整教材在 `docs/`,用 VitePress 构建:
 
 ```sh
-npm --prefix docs install
-npm --prefix docs run dev
+pnpm --prefix docs install
+pnpm --prefix docs run dev
 ```
 
 ## 许可

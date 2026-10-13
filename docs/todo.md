@@ -2,10 +2,11 @@
 
 ## 待办
 
-- [ ] vitepress 升 2.x stable,解掉 docs 的 4 条 npm advisories(上游 2.x 仍为 alpha,出 stable 即办)
+- [ ] vitepress 2.x 出 stable 后去掉 pnpm overrides 原生升级,重验 build 与教材产物
 
 ## 已完成
 
+- [x] docs 依赖告警清零,pnpm overrides 钉 vite 6.4.3 与 esbuild 0.25.0(a33d004、c2c0017,pnpm audit 零告警)
 - [x] nightly 双机型覆盖,判决不过不刷 release(0ff6dfc、7d959ac,ctest 4/4)
 - [x] smoke 断言聚合与 walkthrough 判分补强(7e622c2、5a0c637,ctest 4/4)
 - [x] help 输出与命令表对表断言(aacd8b5,ctest 4/4)

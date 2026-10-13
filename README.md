@@ -85,8 +85,8 @@ docs/       The book (VitePress), one chapter per directory above.
 The full text lives in `docs/` and is built with VitePress:
 
 ```sh
-npm --prefix docs install
-npm --prefix docs run dev
+pnpm --prefix docs install
+pnpm --prefix docs run dev
 ```
 
 ## License
