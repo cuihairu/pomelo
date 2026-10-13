@@ -4,10 +4,10 @@
 
 Pomelo is a small i386 kernel for studying OS internals on your own, built as a **logical microkernel**: the
 kernel only does five things (interrupt dispatch, scheduling, IPC, a syscall
-gate, paging). Everything else — the file system, the terminal, the shell — runs
-as separate tasks on top of message passing, and every one of them lives in its
-own ring 3 address space. It boots straight from QEMU with no bootloader to
-install.
+gate, paging). Everything else — the file system, the terminal, the shell, the
+network — runs as separate tasks on top of message passing, and every one of
+them lives in its own ring 3 address space. It boots straight from QEMU with no
+bootloader to install.
 
 [![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 
@@ -72,6 +72,8 @@ servers/tty/ A terminal server: kernel-delivered chars to a line buffer.
 servers/net/ An e1000 driver, a minimal arp/ip/udp/tcp stack and a socket
             table, all in one ring 3 task.
 apps/shell/ A REPL that talks to the services over IPC (runs at ring 3).
+apps/probe/ The isolation probe: prints one line at ring 3, then reads
+            kernel memory and rightly dies. Revivable with spawn.
 apps/netsh/ The net service's first customer: two echo loops and one
             outbound greeting, driven by replies.
 tools/mkfs/ The host tool that lays out the disk image.

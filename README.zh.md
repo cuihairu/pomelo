@@ -4,7 +4,7 @@
 
 Pomelo 是一个 i386 平台的简易内核,用来自学内核知识,一个**逻辑微内核**:内核只做五件事
 (中断分发、调度、IPC、系统调用门、分页)。除此之外的一切——文件系统、终端、
-shell——都是跑在消息传递之上的独立任务,而且每一个都住在自己 ring 3 的
+shell、网络——都是跑在消息传递之上的独立任务,而且每一个都住在自己 ring 3 的
 地址空间里。它用 QEMU 直接启动,不需要安装引导器。
 
 [![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
@@ -63,6 +63,8 @@ servers/tty/ 终端服务:内核送来的字符攒成行。
 servers/net/ e1000 驱动 + 最小 arp/ip/udp/tcp 栈 + socket 表,同住一个
             ring 3 任务。
 apps/shell/ 命令行 REPL,通过 IPC 与各服务对话(跑在 ring 3)。
+apps/probe/ 隔离演示:在 ring 3 打一行招呼,然后伸手摸内核内存,
+            当场被击杀;spawn 能按名字把它扶回来。
 apps/netsh/ 网络服务的第一个客户:两条回显回路加一句出站问候,全部由
             回答驱动。
 tools/mkfs/ 宿主机工具,负责铺好磁盘镜像。
