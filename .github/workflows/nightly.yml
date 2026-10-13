@@ -98,13 +98,23 @@ jobs:
           a no-disk note; pick -M pc for the full disk battery.
           EOF
           gh release delete nightly --yes --cleanup-tag || true
+          # both machines ship serial.log/boot.png; rename them per machine or
+          # the parallel upload 422s on the second asset with the same name
+          mv artifacts/nightly-q35/nightly-output-q35/serial.log \
+             artifacts/nightly-q35/nightly-output-q35/serial-q35.log
+          mv artifacts/nightly-q35/nightly-output-q35/boot.png \
+             artifacts/nightly-q35/nightly-output-q35/boot-q35.png
+          mv artifacts/nightly-pc/nightly-output-pc/serial.log \
+             artifacts/nightly-pc/nightly-output-pc/serial-pc.log
+          mv artifacts/nightly-pc/nightly-output-pc/boot.png \
+             artifacts/nightly-pc/nightly-output-pc/boot-pc.png
           gh release create nightly \
               --title "nightly $date" \
               --notes-file nightly-notes.md \
               artifacts/nightly-q35/build/pomelo.iso \
               artifacts/nightly-q35/build/kernel \
               artifacts/nightly-q35/build/pomelo.img \
-              artifacts/nightly-q35/nightly-output-q35/serial.log \
-              artifacts/nightly-q35/nightly-output-q35/boot.png \
-              artifacts/nightly-pc/nightly-output-pc/serial.log \
-              artifacts/nightly-pc/nightly-output-pc/boot.png
+              artifacts/nightly-q35/nightly-output-q35/serial-q35.log \
+              artifacts/nightly-q35/nightly-output-q35/boot-q35.png \
+              artifacts/nightly-pc/nightly-output-pc/serial-pc.log \
+              artifacts/nightly-pc/nightly-output-pc/boot-pc.png
