@@ -20,6 +20,18 @@ cmake -B build && cmake --build build
 ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyboard, the mouse and the network
 ```
 
+
+## 本地测试口径
+
+CI 与本地开发按改动面三路分流——改一行文档不该全量编译。
+
+1. **文档改动**（`*.md`、`docs/**`、图片）：不编译。主 CI workflow 的
+   `paths-ignore` 已跳过这些路径。
+2. **代码改动**：只跑改动子集，不全量。
+   - `ctest -R '<改动测试>'`
+3. **全量**（`ctest --output-on-failure`）：仅以下情形触发——CMakeLists.txt、
+   `.github/**`、Docker/Compose 配置、发布前。
+
 ## Run it locally
 
 QEMU is the only runtime dependency:
