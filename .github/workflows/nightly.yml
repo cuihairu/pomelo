@@ -101,10 +101,10 @@ jobs:
           gh release create nightly \
               --title "nightly $date" \
               --notes-file nightly-notes.md \
-              artifacts/nightly-q35/pomelo.iso \
-              artifacts/nightly-q35/kernel \
-              artifacts/nightly-q35/pomelo.img \
-              artifacts/nightly-q35/serial.log \
-              artifacts/nightly-q35/boot.png \
-              artifacts/nightly-pc/serial.log \
-              artifacts/nightly-pc/boot.png
+              artifacts/nightly-q35/build/pomelo.iso \
+              artifacts/nightly-q35/build/kernel \
+              artifacts/nightly-q35/build/pomelo.img \
+              artifacts/nightly-q35/nightly-output-q35/serial.log \
+              artifacts/nightly-q35/nightly-output-q35/boot.png \
+              artifacts/nightly-pc/nightly-output-pc/serial.log \
+              artifacts/nightly-pc/nightly-output-pc/boot.png
