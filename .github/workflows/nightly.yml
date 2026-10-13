@@ -74,6 +74,8 @@ jobs:
     if: success()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: download the evidence from both machines
         uses: actions/download-artifact@v4
         with:
