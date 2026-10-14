@@ -18,4 +18,11 @@
 ## 台账依据(2026-10-13 R1013B)
 
 - 枚举:find 穷尽全仓 *todo*/*roadmap*(排除 build/node_modules/.git/dist),仅 docs/todo.md 一个清单文件;TODO.md、ROADMAP.md、docs/roadmap.md 均不存在。
-- 无遗漏依据:本轮四查均无新项——失败测试(本地 ctest 4/4 绿,ci.yml 与 docs.yml 最近 run 绿)、CI 红(唯一失败为 08:14Z 旧 docs run,已被 c2c0017 修复并两次绿 run 盖过)、文档过期(A7-A10 上轮已修齐)、依赖告警(pnpm audit 零告警)。
+- 无遗漏依据:本轮四查均无新项——失败测试(本地 ctest 4/4 绿,ci.yml 与 docs.yml 最近 run 绿)、CI 红(唯一失败为 08:14Z 旧 docs run,已被 c2c0017 修复并两次绿 run 盖过)、文档过期(A7-A11 已闭环,见 docs/审计-文档一致性.md)、依赖告警(pnpm audit 零告警)。
+
+## 台账依据(2026-10-14 复核)
+
+- 上游:vitepress `latest=1.6.4`、`next=2.0.0-alpha.20`——2.x 仍无 stable;vite 5.4.x 止于 5.4.21、esbuild 0.24.x 止于 0.24.2,overrides 仍承重,未完成项维持阻塞。
+- 已完成条目引用 hash:11 个全部存在且标题相符(`git rev-parse --verify` 逐个核过)。
+- nightly:修复后首个 schedule run 被 GitHub 延迟约 3 小时(run 38490891018,00:33 UTC 才触发),三任务绿、release 刷新(publishedAt 2026-10-14T01:05:54Z)、7 资产齐;延迟期间以 dispatch 补齐(22:08 UTC 那次亦三任务绿)。
+- 测试/CI/依赖:本地 ctest 4/4 绿(40.9s);ci.yml 与 docs.yml 在 `8422a1f` 均 success;`pnpm audit` 零告警。
