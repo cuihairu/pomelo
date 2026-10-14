@@ -1,5 +1,7 @@
 # Pomelo
 
+> **English** | [中文](README.zh.md)
+
 > A microkernel written in C — small enough to read in one sitting, built for learning how kernels work.
 
 Pomelo is a small i386 kernel for studying OS internals on your own, built as a **logical microkernel**: the
