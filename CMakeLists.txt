@@ -137,5 +137,13 @@ add_test(NAME smoke-net
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-net.sh
             ${QEMU} ${KERNEL_ELF} ${IMG} smoke-net.log)
-set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net
-    PROPERTIES TIMEOUT 120)
+add_test(NAME smoke-clear
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-clear.sh
+            ${QEMU} ${KERNEL_ELF} ${IMG} smoke-clear)
+add_test(NAME smoke-reboot
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-reboot.sh
+            ${QEMU} ${KERNEL_ELF} ${IMG} smoke-reboot.log)
+set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net smoke-clear
+    smoke-reboot PROPERTIES TIMEOUT 120)

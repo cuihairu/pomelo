@@ -15,7 +15,7 @@ shell、网络——都是跑在消息传递之上的独立任务,而且每一�
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # 在 QEMU 中启动:串口 shell、PS/2 键盘、鼠标与网络各测一遍
+ctest --test-dir build          # 在 QEMU 中启动:串口 shell、PS/2 键盘、鼠标、网络、擦屏与重启各测一遍
 ```
 
 ## 本地跑起来

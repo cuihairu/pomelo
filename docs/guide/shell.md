@@ -53,6 +53,17 @@ static const struct cmd cmds[] = {
 `ls`/`cat`/`write` 走 fs,`ps`/`spawn`/`uptime`/`mem` 走系统调用门(第 15 章、第 4 章),
 `clear`/`reboot` 各归其主。看一条命令依赖谁,就知道它的消息会经过谁。
 
+## 验证:clear 与 reboot
+
+表里十条命令,前八条会在串口上留下应答,`smoke.sh` 与 `walkthrough.sh` 逐条
+判分;最后两条不吭声,各配一个专门测试——正因为它们不说话,才要用别的东西
+当证据。`clear` 的应答就是没有应答:它发给 tty 一条消息,tty 回一句
+`SYS_CLEAR` 就把 `0xb8000` 擦了,所以 `smoke-clear.sh` 在串口挂 `null` 的机器上
+用 `sendkey` 敲 `mem`、拍一张 VGA,再敲 `clear` 拍第二张,判的是**第二张图上
+只剩提示符**。`reboot` 更没有应答可言:机器该跟着停,QEMU 带 `-no-reboot` 起,
+真停了就是状态 0,坐到 `timeout` 被掐就是 124——`smoke-reboot.sh` 看的就是这个
+退出状态,串口上的 `rebooting...` 只证明那句提示打出来了。
+
 ## 两条文件命令走完 IPC 全程
 
 `cat` 是检验前几章的集成测试:

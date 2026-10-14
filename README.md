@@ -19,7 +19,7 @@ bootloader to install.
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyboard, the mouse and the network
+ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyboard, the mouse, the network, the screen wipe and the reboot
 ```
 
 

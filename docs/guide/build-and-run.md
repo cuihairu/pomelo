@@ -87,6 +87,16 @@ QEMU 的 `sendkey` 在模拟 PS/2 键盘上敲一个 `mem`,再从 `0xb8000` 的 
 残留的 `nc` 会把下一轮的问候抢走,于是 trap 里 QEMU 和耳朵同生共死——
 清理自己,是测试的一部分。
 
+命令电池里还有两条不吭声的,各配一个测试,证的是它们**不说话**这件事:
+`tools/smoke-clear.sh` 敲一个 `mem`,把 `0xb8000` 拍下来,再敲 `clear` 拍第二张——
+第二张图上只剩重打出来的提示符,启动横幅和刚才那条应答都不见了;`clear` 在串口上
+一个字都不吐(它是发给 tty 的消息,tty 回一句 `SYS_CLEAR` 就把显存擦了),
+所以证据只能是“擦干净了”和“擦完 tty 还活着”。
+`tools/smoke-reboot.sh` 更干脆:QEMU 带 `-no-reboot` 起,敲完 `reboot` 就该自己
+退出(状态 0);要是一直坐到 `timeout` 把它掐死(状态 124),就是那一拍
+`0x64 <- 0xfe` 根本没把机器放倒。串口记录只能证明那句 `rebooting...` 打出来了,
+机器到底停没停,看的是退出状态。
+
 ## nightly:每晚真跑一遍
 
 冒烟测试只跑 `pc`。仓库的 [nightly workflow](
@@ -170,6 +180,8 @@ tools/walkthrough.sh   实机走查:完整命令电池 + write/ls/cat 往返,逐
 tools/smoke-ps2.sh     QEMU 冒烟测试:PS/2 键盘输入,VGA 文本缓冲取证
 tools/smoke-mouse.sh   QEMU 冒烟测试:PS/2 鼠标事件,VGA 属性字节取证
 tools/smoke-net.sh     QEMU 冒烟测试:hostfwd 进出,socket 服务对 nc 说话
+tools/smoke-clear.sh   QEMU 冒烟测试:clear 擦屏前后各拍一张 VGA,擦干净才算过
+tools/smoke-reboot.sh  QEMU 冒烟测试:reboot 之后 QEMU 自己退出(状态 0)才算过
 tools/nightly-run.sh   nightly 取证:双开机,串口记录 + screendump
 tools/mkiso.sh         把内核打成 BIOS 可引导的 ISO(grub multiboot)
 boot/kernel.ld         链接脚本
