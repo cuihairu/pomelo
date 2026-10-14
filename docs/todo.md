@@ -27,3 +27,8 @@
 - 已完成条目引用 hash:11 个全部存在且标题相符(`git rev-parse --verify` 逐个核过)。
 - nightly:修复后首个 schedule run 被 GitHub 延迟约 3 小时(run 38490891018,00:33 UTC 才触发),三任务绿、release 刷新(publishedAt 2026-10-14T01:05:54Z)、7 资产齐;延迟期间以 dispatch 补齐(22:08 UTC 那次亦三任务绿)。
 - 测试/CI/依赖:本地 ctest 4/4 绿(40.9s);ci.yml 与 docs.yml 在 `8422a1f` 均 success;`pnpm audit` 零告警。
+
+## 台账依据(2026-10-15 复核)
+
+- 上游:vitepress `latest=1.6.4`、`next=2.0.0-alpha.20`(alpha.20 后 6 周无新发布)——2.x 仍无 stable,唯一未完成项维持阻塞,触发条件未到,无新动作可做。
+- 测试/CI/依赖:本地 ctest 6/6 绿(61.1s,含 clear/reboot 新冒烟);ci.yml、docs.yml 最近 run 在 `4a637fe` 均 success,nightly schedule run(2026-10-14 00:33 UTC)三任务绿;`pnpm audit` 零告警。
