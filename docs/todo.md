@@ -34,3 +34,10 @@
 - 测试/CI/依赖:本地 ctest 6/6 绿(61.1s,含 clear/reboot 新冒烟);ci.yml、docs.yml 最近 run 在 `4a637fe` 均 success,nightly schedule run(2026-10-14 00:33 UTC)三任务绿;`pnpm audit` 零告警。
 - 审计表自漂移:「已核一致」抽样仍记 A10 修复前的 `npm --prefix docs run dev`,与表内 A10 处置结果矛盾;已按两 README 现状(README.md:103、README.zh.md:80)改正,禁词口径复点仍零命中。
 - README 单侧漂移:cdab589 只给 README.md 加语言切换行,README.zh.md 缺镜像;已补并登审计表 A12。远端门禁实证:cbdf8c9、0528d52 两笔纯文档 push 各只触发 docs.yml(均 success),ci.yml 按 paths-ignore 跳过。
+
+## 台账依据(2026-10-16 PATROL1016 复核)
+
+- 唯一未完成项(L5,vitepress 2.x stable 触发)复核:`npm view vitepress dist-tags` → `latest=1.6.4`、`next=2.0.0-alpha.20`,解锁条件仍未成立;维持阻塞,不重开,不越界。
+- 解锁后动作维持预置:docs/package.json 升 `vitepress: ^2.x`、去 `docs/pnpm-workspace.yaml` overrides(vite 6.4.3、esbuild 0.25.0)、pnpm install、build 绿、16 章产物无回归、单 commit。
+- 基线:本地 ctest 6/6 绿(60.9s);nightly 于 `97132e7` success、docs.yml 于 `97132e7` success;`pnpm audit` 零告警。
+- 无代决事项:唯一阻塞项属外部依赖,条件未达前无可拍板动作。
