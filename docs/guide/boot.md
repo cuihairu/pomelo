@@ -1,3 +1,5 @@
+> **中文** | [English](boot.en.md)
+
 # 02 · 启动
 
 对应代码:`boot/`

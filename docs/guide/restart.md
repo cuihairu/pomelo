@@ -1,3 +1,5 @@
+> **中文** | [English](restart.en.md)
+
 # 15 · 倒下与爬起
 
 对应代码:`kernel/sched/prog.c`、`apps/shell/cmd_proc.c`

@@ -1,3 +1,5 @@
+> **中文** | [English](build-and-run.en.md)
+
 # 11 · 构建与运行
 
 对应代码:`CMakeLists.txt`、`tools/mkfs/mkfs.c`、`tools/smoke.sh`

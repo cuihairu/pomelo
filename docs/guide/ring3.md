@@ -1,3 +1,5 @@
+> **中文** | [English](ring3.en.md)
+
 # 14 · 真隔离:ring3
 
 对应代码:`boot/gdt.c`、`kernel/sched/`、`kernel/mm/paging.c`、`kernel/char.c`、`apps/probe/`

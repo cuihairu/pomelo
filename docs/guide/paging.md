@@ -1,3 +1,5 @@
+> **中文** | [English](paging.en.md)
+
 # 13 · 分页上线
 
 对应代码:`kernel/mm/`

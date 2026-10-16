@@ -1,3 +1,5 @@
+> **中文** | [English](scheduling.en.md)
+
 # 04 · 调度
 
 对应代码:`kernel/sched/`

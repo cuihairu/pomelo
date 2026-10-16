@@ -1,3 +1,5 @@
+> **中文** | [English](mouse.en.md)
+
 # 12 · PS/2 鼠标
 
 对应代码:`kernel/mouse.c`、`kernel/vga.c`、`servers/tty/tty.c`

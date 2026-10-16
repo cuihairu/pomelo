@@ -1,3 +1,5 @@
+> **中文** | [English](fs-server.en.md)
+
 # 08 · 文件服务
 
 对应代码:`servers/fs/`(除 format.h)

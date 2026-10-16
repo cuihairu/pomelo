@@ -1,3 +1,5 @@
+> **中文** | [English](shell.en.md)
+
 # 10 · shell
 
 对应代码:`apps/shell/`

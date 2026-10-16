@@ -1,3 +1,5 @@
+> **中文** | [English](tty-server.en.md)
+
 # 09 · 终端服务
 
 对应代码:`servers/tty/`、`kernel/char.c`

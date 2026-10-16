@@ -1,3 +1,5 @@
+> **中文** | [English](ipc.en.md)
+
 # 05 · IPC
 
 对应代码:`kernel/ipc/`

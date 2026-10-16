@@ -1,3 +1,5 @@
+> **中文** | [English](net.en.md)
+
 # 16 · 网络栈与 socket 服务
 
 对应代码:`servers/net/net.c`、`apps/netsh/netsh.c`

@@ -1,3 +1,5 @@
+> **中文** | [English](interrupts.en.md)
+
 # 03 · 中断分发
 
 对应代码:`kernel/intr/`

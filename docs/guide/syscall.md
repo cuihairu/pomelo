@@ -1,3 +1,5 @@
+> **中文** | [English](syscall.en.md)
+
 # 06 · 系统调用门
 
 对应代码:`kernel/syscall/`
