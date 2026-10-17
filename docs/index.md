@@ -25,4 +25,3 @@ features:
     details: cmake -B build && cmake --build build,QEMU 直接引导,不需要装 GRUB,不需要做 ISO。
 ---
 
-> **中文** | [English](index.en.md)
