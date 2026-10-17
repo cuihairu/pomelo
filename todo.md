@@ -1,0 +1,1 @@
+- [ ] 文档接 vitepress 官方 locales 双语（2026-10-17 用户令）：现状 locales=0、仅 1 个英文页（index.en.md）、0 个中文页、config 只有 lang:'zh-CN'。要求：locales.root=en + locales.zh（link:'/zh/'），各自独立 nav/sidebar；英文在 docs/ 根、中文在 docs/zh/；中文必须真中文禁机翻禁复制英文顶替；构建通过贴输出；**禁止自造切换链接**（上一版 `> **中文** | [English](index.en.md)` 已删，commit 6bfce8e）；完成后勾掉并 commit+push，回报 hash 与中英文页数
