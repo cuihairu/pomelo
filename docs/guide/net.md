@@ -1,54 +1,26 @@
-> **中文** | [English](net.en.md)
+# 16 · The network stack and socket service
 
-# 16 · 网络栈与 socket 服务
+Corresponding code: `servers/net/net.c`, `apps/netsh/netsh.c`
 
-对应代码:`servers/net/net.c`、`apps/netsh/netsh.c`
+## The NIC driver lives in user mode
 
-## 网卡驱动住在用户态
+[Chapter 8](/guide/fs-server) set one rule: the ATA ports belong to the fs task, the kernel only delivers messages. The network card does the same — the e1000's PCI configuration space, the MMIO registers, the transmit and receive descriptor rings, the whole driver lives in the ring 3 net task. fs reaches the ports on the IOPL=3 it was born with; net reaches PCI on the same privilege (see `EFLAGS_USER_IOPL` in `boot/main.c`); the part the kernel shows up for is only the interrupt line: `SYS_IRQ_ENABLE` unmasks one pin on the PIC, and when the interrupt comes it uses `irq_wait` to wake the task — the same treatment as the keyboard in [Chapter 9](/guide/tty-server).
 
-[第 8 章](/guide/fs-server)立过一条规矩:ATA 端口归 fs 任务,内核只递消息。
-网卡照办——e1000 的 PCI 配置空间、MMIO 寄存器、收发描述符环,整个驱动都
-住在 ring 3 的 net 任务里。fs 靠出生时的 IOPL=3 摸到端口,net 靠同一份
-特权摸到 PCI(见 `boot/main.c` 的 `EFLAGS_USER_IOPL`);内核出面的只有
-中断这条线:`SYS_IRQ_ENABLE` 放行 PIC 上的某脚,中断来了用 `irq_wait`
-叫醒任务,和[第 9 章](/guide/tty-server)的键盘一个待遇。
+MMIO is the new face. Device registers are mapped on physical addresses; the task first gets a virtual address in exchange through `SYS_MMIO`, then reads and writes the registers just like memory; the descriptor ring is for DMA's use, so it takes `SYS_V2P` to translate the virtual address into the physical address the card recognizes. These two doors are pure paging mechanisms; the full account is recorded in [Chapter 13](/guide/paging). The kernel's knowledge of the network card ends here: it does not know what an e1000 is, only that some task is waiting on some interrupt line.
 
-MMIO 是新面孔。设备寄存器映在物理地址上,任务先 `SYS_MMIO` 换来一个
-虚拟地址,再像读写内存一样读写寄存器;描述符环要给 DMA 用,拿
-`SYS_V2P` 把虚拟地址翻译成网卡认的物理地址。这两扇门是纯分页机关,完整的
-账记在[第 13 章](/guide/paging)。内核对网卡的了解到此为止:
-它不知道 e1000 是什么,只知道有个任务在等某条中断线。
+Both directions are descriptor rings: a string of fixed-length "envelopes", each wrapping one buffer address. After receiving a packet the card writes the status back into the envelope and pulls the interrupt line; the driver sweeps the ring, takes the packets away, and hangs the envelopes back up. There is no clever queue-overflow strategy — when the ring is full they are just dropped, and neither the card nor the driver pretends not to see it.
 
-收发都是描述符环:一串定长的"信封",每封装一个缓冲区地址。网卡收完一包
-把状态写回信封,把中断线拉一下;驱动扫一遍环,取走包,把信封重新挂回去。
-没有队列溢出的聪明策略——环满了就丢,网卡和驱动都不装作没看见。
+## Four layers, one function per layer
 
-## 四层,每层一个函数
+In net.c the protocol stack is nothing but a call chain: `net_rx` reads the Ethernet type number, ARP packets go to `arp_in`, IP packets to `ip_in`; `ip_in` reads the protocol number, ICMP echo requests are answered on the spot, UDP and TCP packets find a socket by destination port and are handed to `sock_in_udp` / `sock_in_tcp`. ARP asks the gateway's MAC first; ICMP trades one round trip with the gateway — each of these two things happens once at boot, there are words on the serial port, there are frames in pcap, trustworthy and checkable.
 
-net.c 里协议栈就是一条调用链:`net_rx` 认以太网类型号,ARP 的包给
-`arp_in`,IP 的给 `ip_in`;`ip_in` 认协议号,ICMP 回显请求就地应答,
-UDP 和 TCP 的包按目的端口找 socket,交给 `sock_in_udp` / `sock_in_tcp`。
-ARP 先问网关的 MAC,ICMP 跟网关打一个来回,这两件事在启动时各做一次,
-串口上有字,pcap 里有帧,可信可查。
+The checksum deserves a mention of its own. The checksums of both UDP and TCP cover a "pseudo-header" — source and destination IP, protocol number and length pieced together in front of the data and computed in one pass (rfc 768 / 793). The two protocols share one single `pseudo_cksum`; the only difference is the protocol number parameter. This parameter was hard-coded to UDP at the start, and the result was that every TCP segment got silently dropped by the peer — the host never answers, and pcap shows nothing but retransmitted SYNs. The lesson is recorded here: **two protocols looking alike does not mean one constant can serve both of them.**
 
-校验和值得单独说。UDP 和 TCP 的校验和都盖着一个"伪首部"——源目 IP、
-协议号、长度拼在数据前面一起算(rfc 768 / 793)。两个协议共用同一个
-`pseudo_cksum`,差别只是协议号参数。这个参数一开始写死成 UDP 的,结果
-TCP 段全部被对端默默丢弃——主机不回话,pcap 里只有重发的 SYN。教训记在
-这里:**两个协议长得像,不等于一个常数能同时伺候它们。**
+## TCP: a small and honest state machine
 
-## TCP:一个小得诚实的状态机
+The TCP in the stack has only four states: LISTEN, SYN_SENT, SYN_RCVD, ESTABLISHED. No option negotiation, no SACK, no congestion control, no out-of-order segments accepted, fixed initial sequence number, fixed window, one socket one connection at a time. These gaps are written in the code's comments, not hidden away in a design document: the peer is the test tools on the host machine, segments arrive in order, and when one arrives out of order it sends duplicate ACKs to beg for a retransmission — **the definition of "good enough" depends on who the peer is, and this stack knows who it serves.**
 
-栈里的 TCP 只有四个状态:LISTEN、SYN_SENT、SYN_RCVD、ESTABLISHED。没有
-选项协商,没有 SACK,没有拥塞控制,不收乱序段,固定初始序号,固定窗口,
-一个 socket 一次一个连接。这些缺口写在代码的注释里,不藏在设计文档里:
-对端是宿主机上的测试工具,段按序到达,乱序了就发重复 ACK 讨重传——
-**够用的定义取决于对端是谁,这个栈知道自己伺候的是谁。**
-
-靠得住的部分是重传。发出去没被确认的段每 50 个心跳(约半秒)重发一次,
-八次不回就写掉这条连接,把挂在它上面的调用者叫醒。FIN 也走同一条路:
-close 时数据还没确认完,就等重传心跳把线路清空再发 FIN——**拆连接和发
-数据抢同一条线时,排队,不插队。**
+The dependable part is retransmission. A segment sent but not acknowledged is retransmitted once every 50 heartbeats (about half a second); eight rounds without an answer and the connection is written off, waking the caller parked on it. FIN travels the same road: if the data is not fully confirmed yet at close, it waits for the retransmission heartbeat to clear the line before sending FIN — **when tearing down a connection and sending data compete for the same line, it queues; it does not cut in line.**
 
 ```c
 if (!s->unacked_len) {           /* only a parked close remains */
@@ -58,72 +30,49 @@ if (!s->unacked_len) {           /* only a parked close remains */
 }
 ```
 
-## socket:把协议栈变成服务
+## socket: turning the protocol stack into a service
 
-到上一节为止都是"一个任务自己聊得欢"。socket 这层把栈开放出去:net
-任务持一张四座的 socket 表,app 按消息说话——
+Everything up to the previous section was "one task chatting happily with itself". The socket layer opens the stack outward: the net task holds a four-seat socket table, and the app speaks in messages —
 
-| 消息 | 请求 | 回答 |
+| Message | Request | Reply |
 | --- | --- | --- |
-| OPEN | 协议、本地端口、对端(全零 = 监听) | arg0=socket,arg1=本地端口 |
-| ACCEPT | socket | arg0=socket,data=对端 ip+端口 |
-| RECV | socket、上限 | arg0=长度,arg1=-1 表对端结束 |
-| SEND | socket、长度、数据 | arg0=已发长度 |
-| CLOSE | socket | 无回答 |
-| ERR | (不是请求,是拒信) | arg1=被拒的请求,arg2=socket,data=理由 |
+| OPEN | protocol, local port, peer (all zero = listening) | arg0=socket, arg1=local port |
+| ACCEPT | socket | arg0=socket, data=peer ip+port |
+| RECV | socket, limit | arg0=length, arg1=-1 means the peer ended |
+| SEND | socket, length, data | arg0=length sent |
+| CLOSE | socket | no reply |
+| ERR | (not a request, a rejection letter) | arg1=rejected request, arg2=socket, data=the reason |
 
-每条请求一个回答,沿用 fs 的旧约:同型,arg0 带数,负数是否。三条新约
-是这一章逼出来的:OPEN 的回答带 arg1(本地端口),因为一个 app 会同时
-开几个 socket,答案回来不分先后,**得让答案自己说清是哪个**;RECV 和
-SEND 的回答带 arg2(socket 号),理由相同——答案先到,请求的名字早忘了,
-猜是要出事的;拒信也一样,arg1 带上被拒的请求,arg2 带上它的 socket——
-一封光秃秃的"no"落进正忙的事件循环,没有名字就无从追起。
+One reply per request, following fs's old contract: same type, arg0 carries the number, a negative is a no. Three new contracts were forced out by this chapter: OPEN's reply carries arg1 (the local port), because one app opens several sockets at once and the replies come back in no fixed order — **the reply has to say for itself which one it is**; the replies of RECV and SEND carry arg2 (the socket number), for the same reason — the reply arrives first, the name of the request is long forgotten, and guessing is how accidents happen; the rejection letter is the same, arg1 carrying the rejected request, arg2 carrying its socket — a bare "no" falling into a busy event loop, without a name there is nothing to trace it back from.
 
-RECV 和 ACCEPT 没有"没数据,过会儿再问"的返回:调用者连消息一起睡在
-socket 上,流量到了才被唤醒。park 的写法和内核的 irq 等待队列同款——
-每个 socket 只有一个座位,第二个 RECV 上门会被直说"已经有人在这儿了"。
-没有超时:对端不来,调用者就一直睡。这个缺口是故意留的,注释里写着。
+RECV and ACCEPT have no "no data yet, ask again later" return: the caller sleeps on the socket together with its message, and is only woken when traffic arrives. The parked style is the same one as the kernel's irq wait queue — each socket has only one seat, and a second RECV that comes knocking is told straight out "there is already someone here". No timeout: if the peer never comes, the caller sleeps on. This gap is left on purpose; it is written in the comments.
 
-主动打开只认网关。`ip_tx` 的 ARP 表里只有一个名字,发给别人的包会
-无声无息地消失,所以 OPEN 收到网关以外的地址直接拒绝,拒信把理由原样
-带来,netsh 打出来是
-`net says no: open: only the gateway is reachable (t=1-)`,`t=` 后面
-是被拒请求(OPEN=1)和它的 socket。**限制被说出来,才是限制;
-藏起来,是坑。**
+Active opens recognize only the gateway. `ip_tx`'s ARP table holds one single name, and packets sent to others vanish without a sound, so OPEN is refused outright for any address beyond the gateway, with the rejection letter carrying the reason exactly as it is; what netsh prints is
+`net says no: open: only the gateway is reachable (t=1-)`, where after `t=` come the rejected request (OPEN=1) and its socket. **A limitation spoken out loud is a limitation; hidden away, it is a trap.**
 
-## netsh:第一个客户
+## netsh: the first customer
 
-netsh 是个事件循环:开机发三个 OPEN——一条出站 TCP 去宿主机的 2324
-送问候,一条监听 2323 回显 TCP,一条 2325 回显 UDP——然后原地等回答,
-来什么处理什么。回显就是把 RECV 收到的字节 SEND 回去;问候发完即 CLOSE。
+netsh is an event loop: at boot it sends three OPENs — one outbound TCP to port 2324 on the host machine to deliver a greeting, one listening on 2323 for TCP echo, one on 2325 for UDP echo — then waits on the spot for replies, handling whatever comes. Echo means SENDing back the bytes that RECV received; the greeting is CLOSEd the moment it is sent.
 
-两个细节是调试换来的。其一,这个栈的监听者在第一个 SYN 到来时就变身成
-那条连接(一个 socket 一个连接),所以每条连接结束,netsh 重开一个新
-监听补位,而不是对着旧 socket 再 ACCEPT。其二,UDP 没有"对端结束"这
-回事,回显的收发循环按 RECV 回答里的 socket 号分流,不靠"上一个
-RECV 是发给谁的"去猜——**事件循环里,凡是靠记忆的归属,迟早张冠李戴。**
+Two details were bought with debugging. First, this stack's listener transforms into that connection the moment the first SYN arrives (one socket one connection), so every time a connection ends, netsh reopens a new listener to fill the seat, instead of ACCEPTing on the old socket again. Second, UDP has no such thing as "the peer ended", so the echo's send-and-receive loop sorts by the socket number in the RECV reply instead of guessing from "who the previous RECV was addressed to" — **in an event loop, any ownership kept by memory will end up on the wrong head sooner or later.**
 
-## 验证:nc 就是验收
+## Verification: nc is the acceptance
 
-宿主机上三句话:
+Three sentences on the host machine:
 
 ```sh
-nc -l -p 2324 &                              # 等问候
-printf 'hello net\n' | nc -N 127.0.0.1 2323  # TCP 回显,回车即回
+nc -l -p 2324 &                              # wait for the greeting
+printf 'hello net\n' | nc -N 127.0.0.1 2323  # TCP echo, answers on enter
 printf 'ping udp\n'  | nc -u -w2 127.0.0.1 2325
 ```
 
-`-N` 不是摆设:stdin 到 EOF 后 nc 要半关写端,内核回 FIN、nc 回应答,
-连接才算走完;不带 `-N` 的 nc 会一直等,等到的是超时,不是内核的错。
-串口上应能看到 `netsh: tcp echo on 2323` 与每个连接的 `netsh: peer
-closed`。空手也能试:不给 2324 放监听者,问候的连接重试八次后放弃,
-串口打印 `net: connect gave up`——**失败要出声,是这个内核的规矩。**
+`-N` is not for show: once stdin reaches EOF, nc has to half-close the write end; the kernel answers FIN, nc replies with the ACK, and only then has the connection been walked to the end. An nc without `-N` waits on and on, and what it waits for is a timeout, not the kernel's fault. On the serial port you should see `netsh: tcp echo on 2323` and, for every connection, `netsh: peer closed`. You can try it empty-handed too: with no listener placed on 2324, the greeting's connection retries eight times and gives up, and the serial port prints `net: connect gave up` — **failure has to make a sound; that is this kernel's rule.**
 
-## 本章文件
+## Files in this chapter
 
 ```
-servers/net/net.c   e1000 驱动、ARP/IP/ICMP/UDP、最小 TCP、socket 表与消息应答
-servers/net/net.h   消息协议、e1000 寄存器、以太网与 ip 常量
-apps/netsh/netsh.c  事件循环:双回显 + 出站问候
-kernel/string.c/.h  memmove:socket 接收缓冲的压实
+servers/net/net.c   e1000 driver, ARP/IP/ICMP/UDP, the minimal TCP, the socket table and message replies
+servers/net/net.h   the message protocol, e1000 registers, Ethernet and ip constants
+apps/netsh/netsh.c   the event loop: two echoes + one outbound greeting
+kernel/string.c/.h  memmove: compacting the socket receive buffer
 ```

@@ -1,48 +1,42 @@
-> **中文** | [English](syscall.en.md)
+# 06 · The syscall gate
 
-# 06 · 系统调用门
+Corresponding code: `kernel/syscall/`
 
-对应代码:`kernel/syscall/`
+## Why services need a gate
 
-## 服务为什么需要门
+A user-mode task that wants to send a message, that wants to block, or that wants to reboot the machine has to ask the kernel to do it for it — because all of these need **kernel privilege**: writing the task table, touching the queues, reaching the hardware. The channel for asking the kernel is the syscall.
 
-用户态任务想发消息、想阻塞、想重启机器,都必须请内核代办——因为这些事都需要
-**内核特权**:写任务表、碰队列、访问硬件。请求内核的通道就是系统调用。
+In a real microkernel, this channel is guaranteed by the CPU privilege levels plus the far-gate hardware. Pomelo's service tasks lived entirely in ring 0 in the early days, but the **interface** was followed from day one: a software interrupt gate, `int 0x80`, which formalizes the act of "entering the kernel." When the tasks move into ring 3 in [Chapter 14](/guide/ring3), this gate together with `DPL=3` becomes the only channel from user to kernel — the interface does not change, a lock is just hung on the door.
 
-在真微内核里,这条通道由 CPU 特权级 + 跳转门硬件保证。Pomelo 的服务任务
-早年全在 ring0,但**接口**从第一天就照做:一个软中断门 `int 0x80`,把“进
-内核”这件事形式化下来。[第 14 章](/guide/ring3)任务搬进 ring 3 时,这扇门
-加上 `DPL=3` 就成了用户到内核的唯一通道——接口没改,只是门上挂了锁。
-
-## 一张十五行的分发表
+## A fifteen-line dispatch table
 
 ```c
 enum {
-    SYS_YIELD   = 0,   /* 让出 CPU */
-    SYS_SEND    = 1,   /* 发送消息 */
-    SYS_RECV    = 2,   /* 接收消息(可能阻塞) */
-    SYS_IRQ_WAIT= 3,   /* 等待某个 IRQ */
-    SYS_REBOOT  = 4,   /* 重启 */
-    SYS_WRITE   = 5,   /* ebx=buf, ecx=len: 控制台输出,内核侧 */
-    SYS_CLEAR   = 6,   /* 清屏 */
-    SYS_SPAWN   = 7,   /* ebx=name: 按名字启动一个已注册程序 */
-    SYS_PS      = 8,   /* ebx=buf, ecx=max: 任务表快照 */
-    SYS_UPTIME  = 9,   /* 开机秒数:心跳倒回来 */
-    SYS_MEM     = 10,  /* ebx=&mem_info: 帧位图,数一遍 */
-    SYS_IRQ_ENABLE = 11, /* ebx=irq: 放行 PIC 脚,认领这条线 */
-    SYS_V2P     = 12,  /* ebx=va: 虚拟到物理,给 DMA 描述符用 */
-    SYS_MMIO    = 13,  /* ebx=pa: 映一页设备寄存器,返回虚拟地址 */
-    SYS_IRQ_EOI = 14,  /* ebx=irq: 重排这条自己认领的线 */
+    SYS_YIELD   = 0,   /* yield the CPU */
+    SYS_SEND    = 1,   /* send a message */
+    SYS_RECV    = 2,   /* receive a message (may block) */
+    SYS_IRQ_WAIT= 3,   /* wait on some IRQ */
+    SYS_REBOOT  = 4,   /* reboot */
+    SYS_WRITE   = 5,   /* ebx=buf, ecx=len: console output, kernel side */
+    SYS_CLEAR   = 6,   /* clear the screen */
+    SYS_SPAWN   = 7,   /* ebx=name: start a registered program by name */
+    SYS_PS      = 8,   /* ebx=buf, ecx=max: a snapshot of the task table */
+    SYS_UPTIME  = 9,   /* seconds since boot: the heartbeat answered back */
+    SYS_MEM     = 10,  /* ebx=&mem_info: the frame bitmap, counted once */
+    SYS_IRQ_ENABLE = 11, /* ebx=irq: unmask the PIC line, take this one over */
+    SYS_V2P     = 12,  /* ebx=va: virtual to physical, for the DMA descriptor */
+    SYS_MMIO    = 13,  /* ebx=pa: map a page of device registers, returns a virtual address */
+    SYS_IRQ_EOI = 14,  /* ebx=irq: re-acknowledge the line you took over */
 };
 ```
 
-内核侧就是按号分派。参数走寄存器(eax=号,ebx/ecx=参),返回值写回 eax:
+On the kernel side it simply dispatches by number. Arguments travel in registers (eax = number, ebx/ecx = arguments), and the return value is written back to eax:
 
 ```c
 void syscall_entry(struct regs *r) {
     switch (r->eax) {
     case SYS_YIELD:
-        sched_tick();                 /* 轮转:把 CPU 交给下一位 */
+        sched_tick();                 /* rotate: hand the CPU to the next one */
         r->eax = 0;
         return;
     case SYS_SEND:
@@ -52,14 +46,14 @@ void syscall_entry(struct regs *r) {
         r->eax = ipc_recv((struct msg *)r->ebx, r->ecx);
         return;
     case SYS_IRQ_WAIT:
-        irq_wait(r->ebx);             /* ebx 是 IRQ 掩码 */
+        irq_wait(r->ebx);             /* ebx is the IRQ mask */
         r->eax = 0;
         return;
     case SYS_REBOOT:
-        reboot_now();                 /* 往 0x64 口打一拍,重启 */
+        reboot_now();                 /* a tap on port 0x64, reboot */
         return;
     case SYS_WRITE:
-        con_write((const char *)r->ebx, r->ecx);   /* 控制台归内核管 */
+        con_write((const char *)r->ebx, r->ecx);   /* the console is the kernel's to run */
         r->eax = 0;
         return;
     case SYS_CLEAR:
@@ -80,18 +74,23 @@ void syscall_entry(struct regs *r) {
         r->eax = 0;
         return;
     case SYS_IRQ_ENABLE:
-        /* PIC 掩码和 IDT 都是内核地盘,握着线的驱动来这里开口子。
-         * 挂上的桩是空的:唤醒人是 irq.c,设备自己的中断状态由驱动
-         * 清。认领这个动作把这条线的 EOI 从内核挪给驱动(sys_irq_eoi),
-         * 电平触发下得先让设备闭嘴再重排 8259。 */
+        /* The PIC mask and the IDT are both kernel territory; a driver that
+         * takes a line opens its hole here. The hook that is installed is
+         * empty: the one who wakes up is irq.c, and the device's own interrupt
+         * state is cleared by the driver. Taking the line over moves this
+         * line's EOI from the kernel to the driver (sys_irq_eoi): under level
+         * triggering the device has to be made to shut up before the 8259 can
+         * be re-acknowledged. */
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
         irq_claim(r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_EOI:
-        /* 认领的另一半:驱动让设备闭了嘴,现在 PIC 才可以重排。内核
-         * 投递时故意跳过 EOI,就是为了把顺序留给这里的驱动。 */
+        /* The other half of taking over: the driver has made the device shut
+         * up, and only now can the PIC re-acknowledge. The kernel deliberately
+         * skips the EOI when it delivers, precisely to leave the ordering to
+         * the driver here. */
         pic_eoi(r->ebx);
         r->eax = 0;
         return;
@@ -102,13 +101,13 @@ void syscall_entry(struct regs *r) {
         r->eax = mmio_map(r->ebx);
         return;
     }
-    r->eax = -1;                      /* 没这个号 */
+    r->eax = -1;                      /* no such number */
 }
 ```
 
-## 用户态的调用约定
+## The calling convention on the user side
 
-服务任务不能直接调 `ipc_send`,而是通过一个小包装,把参数塞进寄存器、触发 `int 0x80`:
+A service task cannot call `ipc_send` directly; instead it goes through a small wrapper that stuffs the arguments into registers and triggers `int 0x80`:
 
 ```c
 static inline int sys_send(int dst, struct msg *m) {
@@ -121,26 +120,17 @@ static inline int sys_send(int dst, struct msg *m) {
 }
 ```
 
-`int 0x80` 让 CPU 转到 IDT 第 128 项——我们在 `idt_init` 里把它接到
-`intr_stub_128`。桩补一个假的错误码、压上向量号,跳进 `intr_common` 保存
-`regs` 现场,交给 `intr_dispatch`;它认出 0x80 才转手 `syscall_entry`。
-这条路径和[中断章](/guide/interrupts)用的是同一套桩机制,只是入口不同。
+`int 0x80` makes the CPU jump to entry 128 of the IDT — we wire it to `intr_stub_128` inside `idt_init`. The stub pads in a fake error code, pushes the vector number, and jumps into `intr_common`, which saves the `regs` scene and hands off to `intr_dispatch`; only when it recognizes 0x80 does it pass on to `syscall_entry`. This path shares the same stub machinery as the [interrupts chapter](/guide/interrupts); only the entry point is different.
 
-## 一扇门,而不是一堆函数
+## One door, not a pile of functions
 
-值得强调:Pomelo 的任务和内核之间**只有这十五个调用**。读文件、按键,统统
-不经过系统调用,而是服务与服务之间的消息(走 `SYS_SEND`/`SYS_RECV`);
-`SYS_WRITE`/`SYS_CLEAR` 是仅有的例外——屏幕归内核管,任务想说话只有这一个
-出口(缘由见[第 14 章](/guide/ring3))。最新的四个(11–14)是网卡驱动住进
-ring 3 时添的:开中断线、确认收讫、DMA 描述符的物理地址、设备寄存器的映射——
-驱动要的特权,内核一概不白给,一次一个门。系统调用表越小,内核越小;内核越小,
-越接近微内核的本来面目。
+Worth emphasizing: between a Pomelo task and the kernel there are **only these fifteen calls**. Reading a file, a keystroke — none of it goes through the syscall, but is a message between services (via `SYS_SEND`/`SYS_RECV`); `SYS_WRITE`/`SYS_CLEAR` are the only exceptions — the screen is the kernel's to run, and a task that wants to say anything has only this one exit (the reason is in [Chapter 14](/guide/ring3)). The latest four (11–14) were added when the NIC driver moved into ring 3: unmask an interrupt line, acknowledge receipt, the physical address for the DMA descriptor, mapping the device registers — for the privileges a driver asks for, the kernel never hands one over for free, one gate at a time. The smaller the syscall table, the smaller the kernel; the smaller the kernel, the closer it comes to what a microkernel is supposed to be.
 
-## 本章文件
+## Files of this chapter
 
 ```
-kernel/syscall/syscall.h   调用号与用户态 inline 包装
-kernel/syscall/syscall.c   int 0x80 入口与分发表
+kernel/syscall/syscall.h   call numbers and the user-mode inline wrappers
+kernel/syscall/syscall.c   the int 0x80 entry and the dispatch table
 ```
 
-下一章进入用户态世界:[磁盘格式](/guide/disk-format)。
+The next chapter enters the world of user mode: [the disk format](/guide/disk-format).

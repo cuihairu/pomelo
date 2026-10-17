@@ -1,22 +1,16 @@
-> **中文** | [English](boot.en.md)
+# 02 · Startup
 
-# 02 · 启动
+Corresponding code: `boot/`
 
-对应代码:`boot/`
+## What happens after power-on
 
-## 上电之后发生了什么
+After the CPU resets it stops in real mode; the BIOS finishes its self-check and hands control to the bootloader. We do not want to write our own bootloader, and do not want to make an ISO, so we borrow one convention: **Multiboot**. QEMU's `-kernel` can recognize an ELF file carrying a Multiboot header and acts as the bootloader itself: it loads the kernel into memory, switches to protected mode, then jumps to the entry we specify.
 
-CPU 复位后停在实模式,BIOS 做完自检,把控制权交给引导器。我们不想自己写引导器,
-也不想做 ISO,于是借用一个约定:**Multiboot**。QEMU 的 `-kernel` 能识别带
-Multiboot 头的 ELF 文件,自己充当引导器:把内核载入内存,切到保护模式,
-再跳到我们指定的入口。
-
-这个约定只需要内核开头 12 个字节(魔数、标志、校验和各一个长字)外加 4 字节
-对齐。看 `boot/boot.S`:
+This convention needs only 12 bytes at the head of the kernel (magic, flags, checksum, one long word each) plus 4-byte alignment. Look at `boot/boot.S`:
 
 ```asm
 .set MB_MAGIC, 0x1BADB002
-.set MB_FLAGS, 0x0            # 内核由引导器载入,无需请求额外内存信息
+.set MB_FLAGS, 0x0            # the kernel is loaded by the bootloader, no extra memory info requested
 .set MB_CHECK, -(MB_MAGIC + MB_FLAGS)
 
 .section .multiboot, "a"
@@ -26,29 +20,28 @@ Multiboot 头的 ELF 文件,自己充当引导器:把内核载入内存,切到�
     .long MB_CHECK
 ```
 
-`CHECK` 是前两者的补码和,和必须为 0——这是 Multiboot 规定的完整性校验。
-`boot/kernel.ld` 把这个段放到最前面,保证魔数落在文件开头。
+`CHECK` is the two's-complement sum of the two above; the sum must be 0 — that is the integrity check Multiboot requires. `boot/kernel.ld` places this section at the very front, guaranteeing the magic number lands at the start of the file.
 
-## 从汇编跳进 C
+## Jumping from assembly into C
 
-引导器切进保护模式后,栈是指望不上的,得自己设:
+Once the bootloader has switched into protected mode, there is no stack to count on — you have to set one up yourself:
 
 ```asm
 _start:
-    movl $boot_stack_top, %esp  # 设栈,否则 C 函数一返回就崩
-    pushl %ebx                  # Multiboot 信息结构指针,转交 kmain
-    pushl %eax                  # 魔数,转交 kmain 校验
+    movl $boot_stack_top, %esp  # set up the stack, otherwise the first returning C function crashes
+    pushl %ebx                  # pointer to the Multiboot info structure, handed to kmain
+    pushl %eax                  # the magic, handed to kmain for verification
     call  kmain
 1:  cli
     hlt
-    jmp 1b                      # 内核入口不该返回;真返回了就停住
+    jmp 1b                      # the kernel entry should not return; if it really does, stop
 ```
 
-栈空间开在 `.bss` 里的一块静态数组——此刻还没有内存管理,能用静态内存就用静态内存。
+The stack space is one static array opened up in `.bss` — there is no memory management yet at this point, so use static memory wherever static memory works.
 
-## 第一行 C
+## The first line of C
 
-`boot/main.c` 里的 `kmain` 是整条启动链的收束口,顺序不能乱:
+`kmain` in `boot/main.c` is the gathering point of the whole boot chain, and the order cannot be shuffled:
 
 ```c
 void kmain(u32 magic, u32 info) {
@@ -73,27 +66,23 @@ void kmain(u32 magic, u32 info) {
 }
 ```
 
-注意最后这一跳:`kmain` 建完舞台就把 CPU 交给第一个任务,自己的栈被记成
-"任务 0",永远停在 `switch_to` 里。此后所有工作都发生在 `servers_start` 创建的
-任务里。这正是微内核的姿态——内核不是主角,只是舞台。
+Notice this final jump: after `kmain` has built the stage it hands the CPU to the first task, and its own stack is recorded as "task 0", staying forever inside `switch_to`. From then on, all work happens in the tasks created by `servers_start`. That is exactly the posture of a microkernel — the kernel is not the protagonist, it is just the stage.
 
-## 一个顺序上的坑
+## A pitfall of ordering
 
-必须先 `idt_init` 再 `intr_enable`。如果在中断门还没装好时就开中断,第一个时钟滴答
-会跳到一个空向量,机器当场三重故障复位。初学内核最常见的“一开机就重启”多半是这个。
+You must do `idt_init` before `intr_enable`. If interrupts are enabled while the interrupt gates are not yet installed, the first clock tick jumps to an empty vector and the machine triple-faults and resets on the spot. The most common beginner symptom of "reboots the moment it powers on" is mostly this one.
 
-分页同理:`paging_init` 在 `servers_start` 之前——页表建好、PG 位翻开,任务才
-有资格上场;反过来,任务跑起来再建页表,第一个任务就会踩进还没映射的地址。
+Paging follows the same rule: `paging_init` before `servers_start` — page tables built, PG bit flipped on, and only then are tasks qualified to come on stage. Do it the other way around, building the page tables after the tasks are already running, and the first task steps straight into an address that is not mapped yet.
 
-## 本章文件
+## Files in this chapter
 
 ```
-boot/boot.S          Multiboot 头 + _start
-boot/main.c          kmain:初始化硬件,拉起服务,开中断
-boot/kernel.ld       链接脚本,魔数置于文件首
-boot/gdt.c/.h        全局描述符表:内核段与 TSS(第 14 章)
-kernel/kprintf.c/.h  内核侧的 printf:kmain 的嘴
-kernel/types.h       u8/u32 这些基础类型
+boot/boot.S          Multiboot header + _start
+boot/main.c          kmain: initializes hardware, starts the services, enables interrupts
+boot/kernel.ld       linker script, magic placed at the start of the file
+boot/gdt.c/.h        global descriptor table: kernel segments and TSS (Chapter 14)
+kernel/kprintf.c/.h  the kernel-side printf: kmain's mouth
+kernel/types.h       the basic types like u8/u32
 ```
 
-下一章:[中断分发](/guide/interrupts)。
+The next chapter: [Interrupt dispatch](/guide/interrupts).

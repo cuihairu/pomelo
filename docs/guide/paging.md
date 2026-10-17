@@ -1,20 +1,14 @@
-> **中文** | [English](paging.en.md)
+# 13 · Paging comes online
 
-# 13 · 分页上线
+Corresponding code: `kernel/mm/`
 
-对应代码:`kernel/mm/`
+## The first thing only the kernel can do
 
-## 第一个只有内核能做的事
+[Chapter 1](/guide/intro) said it: the criterion for dividing kernel from services is "what every task cannot get around". Memory translation is exactly such a thing: one machine wants to use the address 0x40000000 for several different jobs at the same time, and only the MMU inside the CPU can adjudicate. So `kernel/` gains a fifth mechanism — paging. The previous four mechanisms got one chapter each; this one gets two: this chapter owns "how addresses get translated", the next owns "how the world gets swapped".
 
-[第 1 章](/guide/intro)说过,划分内核与服务的标准是"每个任务都绕不开的"。
-内存翻译正是这样的东西:一台机器同时想用 0x40000000 这块地址干几件不同的事,
-只有 CPU 里的 MMU 能裁决。于是 `kernel/` 里多了第五个机制——分页,前四个机制
-一章一个的故事,这次是两个:本章管"地址怎么翻",下一章管"世界怎么换"。
+## Frames: a bitmap
 
-## 帧:一张位图
-
-分页之前得先有页可分。物理内存按 4 KB 切成帧,分配器就是一张位图,`frame.c`
-的全部家当:
+Before paging there have to be pages to hand out. Physical memory is cut into 4 KB frames and the allocator is a bitmap — the whole outfit of `frame.c`:
 
 ```c
 static u8 used[NFRAMES / 8];
@@ -28,28 +22,20 @@ void frame_init(void) {
 }
 ```
 
-`kernel_end` 是链接脚本里的一个符号:内核镜像到哪结束,哪以下的帧(BIOS 数据、
-VGA 文本、内核自己的 .bss)就整体标记为已用。位图从头扫到尾,第一个空位就是
-分配结果——16 MB 内存、几十个用户帧的规模下,这比链表省事,比教科书诚实。
-借出去的帧也有归还的路:`frame_free` 清位,还顺手把 `first_free` 水位拉到
-它头上——免得还回来的帧落在扫描起点之外,从此无人认领。眼下只有一位客人:
-用户目录新建到一半失败,把代码页、页表、栈帧原路退回。
+`kernel_end` is a symbol from the linker script: wherever the kernel image ends, the frames below that point (BIOS data, VGA text, the kernel's own .bss) are all marked used. The bitmap is scanned from head to tail and the first empty slot is the allocation result — at the scale of 16 MB of memory and a few dozen user frames, that is less fuss than a linked list and more honest than a textbook. Frames that were lent out also have a way back: `frame_free` clears the bit and, in passing, pulls the `first_free` watermark up to it — so a returned frame does not land beyond the scan's starting point and go unclaimed from then on. At the moment there is only one guest: when a user directory fails partway through creation, the code pages, page table and stack frames are handed back the way they came.
 
-这张位图不用隔着书页想象——shell 里的 `mem` 命令就是它的一面镜子:
+This bitmap needs no imagining across the pages of a book — the `mem` command in the shell is a mirror of it:
 
 ```
 pomelo> mem
 frames: 3791 of 4096 free
 ```
 
-`SYS_MEM` 把位图数一遍,关着中断数,免得数到一半时钟把一帧发出去、三个数
-对不上账。自己动手就能看见内核吃内存:敲一次 `mem`,再 `spawn probe`,再
-`mem`——少的那些帧,就是 probe 的新地址空间(代码页 + 页表)。分配器从
-"书上的一段代码"变成了"机器上一条看得见的账目"。
+`SYS_MEM` counts the bitmap over, counting with interrupts off, so the clock cannot hand out a frame halfway through and leave the three numbers failing to add up. You can see the kernel's memory with your own hands: type `mem` once, then `spawn probe`, then `mem` again — the frames that went missing are probe's new address space (code pages + page table). The allocator goes from "a piece of code in a book" to "a visible account on the machine".
 
-## 恒等映射:地址一个都不变
+## The identity mapping: not one address changes
 
-内核自己的页目录做的是最保守的事:把低 16 MB **原样映射**到原地址。
+The kernel's own page directory does the most conservative thing: map the low 16 MB **identically**, to the same addresses.
 
 ```c
 void paging_init(void) {
@@ -66,48 +52,32 @@ void paging_init(void) {
 }
 ```
 
-翻开 CR0 的 PG 位那一刻,MMU 开始工作,而内核毫无察觉——每条已经写好的取指、
-每次 `outb`、每个栈操作,翻译前后是同一个地址。这是刻意的:`PTE_RW` 但不带
-`PTE_US`,低 16 MB 是**内核专属**;ring 3 一进来,这半边世界就对它关了门。
-机制先立起来,地址不变,才轮到下一章动地址。
+The moment CR0's PG bit is flipped, the MMU starts working and the kernel notices nothing — every instruction fetch already written, every `outb`, every stack operation: the address is the same before and after translation. That is deliberate: `PTE_RW` but without `PTE_US`, so the low 16 MB belongs to the kernel alone; the moment ring 3 walks in, this half of the world closes its door to it. Let the mechanism stand first with addresses unchanged; only then does the next chapter get to move addresses.
 
-这张目录还有个身份:所有用户页目录的**内核半边**。下一章会看到,新建用户
-目录就是把这四条 PDE 原样拷过去——内核在任何任务的地址空间里都长一个样。
+This directory has one more identity: the **kernel half** of every user page directory. The next chapter will show that creating a user directory is just copying these four PDEs over verbatim — the kernel looks the same in the address space of any task.
 
-## 设备窗与物理地址:mmio_map 与 v2p
+## Device windows and physical addresses: mmio_map and v2p
 
-这两件家具是[网络章](/guide/net)入住时添的,但它们是纯分页机关,家在这里。
+These two pieces of furniture were added when the network chapter moved in, but they are pure paging machinery, so their home is here.
 
-PCI 设备的寄存器映在物理地址空间的高处(e1000 的 MMIO BAR 由配置空间报
-上来,在 4 GB 的头顶一带),而所有页目录都只认认真真映射了低 16 MB——
-高位物理地址,内核自己也够不着。谁要碰设备,谁自己来开窗:
+PCI device registers are mapped high in the physical address space (the e1000's MMIO BAR is reported by the configuration space, up around the top of 4 GB), while every page directory only dutifully maps the low 16 MB — high physical addresses are out of the kernel's own reach as well. Whoever wants to touch the device opens the window themselves:
 
 ```c
-u32 mmio_map(u32 pa);   /* 把一页设备内存映进调用者空间,返回虚拟地址 */
-u32 v2p(u32 va);        /* 走一遍当前任务的页表,把虚拟地址翻回物理地址 */
+u32 mmio_map(u32 pa);   /* map one page of device memory into the caller's space, return the virtual address */
+u32 v2p(u32 va);        /* walk the current task's page table, translate the virtual address back to a physical address */
 ```
 
-`mmio_map` 在 `MMIO_BASE`(0x40800000)开一个**单 PDE 宽的窗**:槽位取物理
-页号的低 10 位,同一物理页永远落进同一虚拟地址,重复映射幂等;页表项
-`P|RW|US`——除了任务自己的代码和数据,这是 ring 3 唯一摸得到的外姓映射。
-4 MB 的窗、4 KB 一槽、共 1024 槽,代价也明码标价:物理页号一高过 4 MB
-一档,两页就挤进同一槽。对只有一条 MMIO BAR 的 e1000 正合适,这笔账写在
-注释里。
+`mmio_map` opens a window one PDE wide at `MMIO_BASE` (0x40800000): the slot takes the low 10 bits of the physical page number, so the same physical page always lands in the same virtual address and repeated mapping is idempotent; the page table entry is `P|RW|US` — apart from the task's own code and data, this is the only mapping ring 3 can reach that belongs to someone else. A 4 MB window, 4 KB per slot, 1024 slots in total, and the price is plainly marked: as soon as the physical page number rises one step past 4 MB, two pages squeeze into the same slot. Just right for an e1000 with only one MMIO BAR; that reckoning is written in the comment.
 
-门本身不验身份:`SYS_MMIO` 对任何任务放行任何物理页。0.1 版的驾照制度
-还没立法——限制被说出来,才是限制。
+The gate itself checks no identity: `SYS_MMIO` lets any task through to any physical page. The licensing regime of version 0.1 is not yet law — a restriction only counts once it has been spoken.
 
-`v2p` 回答另一半问题:DMA 描述符里必须写**机器地址**,而驱动手里只有自己
-的虚拟地址。它走一遍当前任务的目录和页表(pa==va 的老把戏让内核不切 cr3
-就能读表),页不在就返回 0。翻译是内核的地盘;驱动来问,内核照实说。
+`v2p` answers the other half of the question: DMA descriptors must carry a **machine address**, while the driver holds only its own virtual addresses. It walks the current task's directory and page table (the old pa==va trick lets the kernel read the tables without switching cr3); if the page is not there it returns 0. Translation is the kernel's turf; the driver asks, and the kernel tells it straight.
 
-(真硬件还得给设备窗配不可缓存位;这台机器没有缓存,是模拟器替我们省下的
-一笔,`paging.c` 的注释也认了。)
+(Real hardware would also have to give the device window its uncacheable bit; this machine has no cache, a bill the emulator saves us, and the comment in `paging.c` admits it too.)
 
-## 页错误来了怎么办
+## What to do when a page fault arrives
 
-分页一开,CPU 就多了一类事要报告:14 号异常,页错误。`intr.c` 的分发现在
-长这样:
+Once paging is on, the CPU has one more class of thing to report: exception 14, the page fault. The dispatch table in `intr.c` now looks like this:
 
 ```c
 if (r->int_no == 14) {                /* page fault */
@@ -116,15 +86,13 @@ if (r->int_no == 14) {                /* page fault */
 }
 ```
 
-`cr2_fault()` 读 CR2——CPU 在这里记下了出错的地址,这是 MMU 递来的唯一物证。
-怎么处置,取决于出事的人是谁:内核自己页错误是内核的 bug,panic 停机;ring 3
-任务页错误,杀掉的是那个任务。判决逻辑在下一章。
+`cr2_fault()` reads CR2 — the CPU has recorded the faulting address there, and that is the only physical evidence the MMU delivers. What happens next depends on who is at fault: a page fault by the kernel itself is a kernel bug, panic and stop the machine; a page fault by a ring 3 task, the task is the one that gets killed. The verdict logic is in the next chapter.
 
-## 本章文件
+## Files of this chapter
 
 ```
-kernel/mm/frame.c/.h  物理帧位图分配器
-kernel/mm/paging.c/.h 内核页目录、恒等映射、cr3 与 CR0
+kernel/mm/frame.c/.h  the physical frame bitmap allocator
+kernel/mm/paging.c/.h the kernel page directory, the identity mapping, cr3 and CR0
 ```
 
-下一章:[真隔离:ring3](/guide/ring3)。
+The next chapter: [Real isolation: ring 3](/guide/ring3).

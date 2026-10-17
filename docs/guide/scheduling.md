@@ -1,109 +1,91 @@
-> **中文** | [English](scheduling.en.md)
+# 04 · Scheduling
 
-# 04 · 调度
+Corresponding code: `kernel/sched/`
 
-对应代码:`kernel/sched/`
+## A task is nothing but a stack
 
-## 任务就是一个栈
-
-进程、线程这些词容易唬人。剥开看,一个可运行的任务就三样东西:**一段代码、
-一个栈、一份保存好的寄存器现场**。Pomelo 的任务表很小:
+Words like process and thread are easy to bluff with. Peel them open and a runnable task is just three things: **a piece of code, a stack, and a saved register scene**. Pomelo's task table is small:
 
 ```c
 struct task {
-    u32        esp;       /* 现场保存点:swap 时把 esp 存在这 */
-    u32        pdir;      /* 页目录,0 = 用内核自己的;第 14 章 */
+    u32        esp;       /* where the scene is saved: esp is stored here at swap time */
+    u32        pdir;      /* page directory, 0 = use the kernel's own; Chapter 14 */
     int        state;     /* FREE / READY / BLOCKED */
-    int        woke;      /* 被 sched_wake 碰过;irq_wait 靠它认出“为消息而醒” */
-    const struct prog *prog;  /* 这个座位属于哪个程序;第 15 章 */
-    struct msgq inbox;    /* 它自己的消息队列,IPC 章详解 */
+    int        woke;      /* touched by sched_wake; irq_wait relies on it to tell "woken for a message" */
+    const struct prog *prog;  /* which program this seat belongs to; Chapter 15 */
+    struct msgq inbox;    /* its own message queue, detailed in the IPC chapter */
 };
 ```
 
-栈是从一张静态大数组里切出来的(每任务 4 KB)——这个简易内核不搞分配器,连栈都
-先量好尺寸。
+Stacks are carved out of one big static array (4 KB per task) — this simple kernel does not bother with an allocator; even stacks have their size measured out in advance.
 
-`esp` 是全部秘密所在。所谓“切换”,就是**换掉 esp 再 `ret`**——CPU 就会用另一个
-栈的现场继续跑。`pdir` 是另一半:切换时除了换栈,还要换 cr3,任务之间地址空间
-跟着走(第 14 章详解)。
+The whole secret is `esp`. The so-called "switch" is just **swap esp and `ret`** — and the CPU carries on with the scene of another stack. `pdir` is the other half: when switching, besides swapping the stack you also swap cr3, and address spaces travel between tasks (detailed in Chapter 14).
 
-## 上下文切换:一段不得不看的汇编
+## Context switch: a piece of assembly you cannot skip
 
-`kernel/sched/switch.S` 是整个调度器的心脏,不到二十行:
+`kernel/sched/switch.S` is the heart of the whole scheduler, under twenty lines:
 
 ```asm
 switch_to:
-    cli                    # 换栈中途被时钟打断,两个栈都得坏
+    cli                    # a clock tick in the middle of the stack swap ruins both stacks
     movl  4(%esp), %eax    # &old->esp
     movl  8(%esp), %edx    # new->esp
     pushl %ebp
     pushl %edi
     pushl %esi
     pushl %ebx
-    movl  %esp, (%eax)     # 把当前 esp 存进 old->esp
-    movl  %edx, %esp       # 换成新任务的栈
+    movl  %esp, (%eax)     # store the current esp into old->esp
+    movl  %edx, %esp       # switch to the new task's stack
     popl  %ebx
     popl  %esi
     popl  %edi
     popl  %ebp
-    ret                    # 用新任务的返回地址继续
+    ret                    # continue with the new task's return address
 ```
 
-一次调用把**被调用者要保存的寄存器**压栈、换栈、再弹回——从新栈里 `ret` 出去
-时,CPU 已经在跑另一个任务了。C 编译器保证的 callee-saved 寄存器恰好这四个,
-压它们就够了。`cli` 关中断护住换栈的几条指令;全新任务的第一次 `ret` 落在
-`ring3_entry` 上:设好用户数据段,然后 `iret` 直接落进 ring 3——这个世界里
-没有 ring 0 的任务可进(第 14 章)。
+One call pushes the **callee-saved registers**, swaps the stack, and pops them back — when the `ret` goes out of the new stack, the CPU is already running another task. The callee-saved registers guaranteed by the C compiler happen to be exactly these four, so pushing them is enough. The `cli` disables interrupts to protect the few instructions of the stack swap; the first `ret` of a brand-new task lands on `ring3_entry`: it sets up the user data segments, then `iret` drops straight into ring 3 — in this world there are no ring 0 tasks to enter (Chapter 14).
 
-## 何时切
+## When to switch
 
-Pomelo 是**协作 + 抢占**的混合体,但主动作是抢占:
+Pomelo is a hybrid of **cooperative + preemptive**, but the main act is preemption:
 
-- **时钟抢占**:每次 IRQ0,调度器决定要不要切;
-- **主动让出**:`yield()`(系统调用 `SYS_YIELD`)让正在忙等的任务换人。
+- **Clock preemption**: every IRQ0, the scheduler decides whether to switch;
+- **Voluntary yield**: `yield()` (the syscall `SYS_YIELD`) lets a task busy-waiting hand over to someone else.
 
-真正的决定在 `sched_tick`:
+The real decision is in `sched_tick`:
 
 ```c
 void sched_tick(void) {
     if (cur < 0) return;
-    int next = pick_ready();          /* cur 之后第一个 READY 的任务 */
+    int next = pick_ready();          /* the first READY task after cur */
     if (next >= 0) sched_switch(next);
 }
 ```
 
-朴素轮转(round-robin):从当前任务往后找第一个没阻塞的。10 ms 一轮,
-谁也别想独占 CPU。
+Plain round-robin: starting from the current task, look forward for the first one not blocked. 10 ms per round — nobody gets to hog the CPU.
 
-## 阻塞:让出 CPU 的正当理由
+## Blocking: the legitimate reason to hand over the CPU
 
-一个任务在等 IPC 消息或等中断时,把状态置 `BLOCKED`,再调 `sched_next` 让出。
-调度器会跳过它:
+When a task is waiting on an IPC message or an interrupt, it sets its state to `BLOCKED` and calls `sched_next` to hand over. The scheduler skips it:
 
 ```c
 void sched_wake(int tid) {
     if (tasks[tid].state == ST_BLOCKED) {
         tasks[tid].state = ST_READY;
-        tasks[tid].woke = 1;          /* 告诉 irq_wait:是我叫的你 */
+        tasks[tid].woke = 1;          /* tell irq_wait: I'm the one who called you */
     }
 }
 ```
 
-`irq_raise` 和 `ipc_send` 干的就是 `sched_wake` 这件事——**中断和消息都能唤醒任务**。
-这是整本书反复出现的同一招。
+What `irq_raise` and `ipc_send` do is exactly the `sched_wake` thing — **both interrupts and messages can wake a task**. It is the same move this book keeps repeating.
 
-## 没人可跑:去睡觉,别空转
+## No one to run: go to sleep, do not spin
 
-如果所有任务都 BLOCKED 了呢?这不是死锁——每个服务都正等着自己的硬件。
-`sched_next` 会把 CPU 停进 `hlt`:中断一开,CPU 睡到下一个中断(最不济是
-100 Hz 的时钟)再叫人。还有一条细腻的出路:如果时钟刚好叫醒的就是正在做
-“阻塞自己”这件事的任务,`sched_next` 发现场上已是 READY,直接返回——阻塞
-当场作废。判断、入睡、复检,必须关中断一口气做完。
+What if every task is BLOCKED? That is not a deadlock — every service is waiting on its own hardware. `sched_next` stops the CPU into `hlt`: with interrupts on, the CPU sleeps until the next interrupt (at worst the 100 Hz clock) calls someone again. There is one more delicate way out: if the clock happens to wake exactly the task that is in the middle of "blocking itself", `sched_next` finds the field already READY and returns on the spot — the blocking is cancelled on the spot. Judging, sleeping, re-checking must be done in one breath with interrupts disabled.
 
-## 心跳也是钟
+## The heartbeat is also a clock
 
-时钟中断每来一次,`sched_clock_tick` 就把 `ticks` 加一——**内核的心跳次数
-就是开机时间**。`uptime` 命令把它递出来:
+Every time a clock interrupt arrives, `sched_clock_tick` adds one to `ticks` — **the kernel's heartbeat count is the uptime**. The `uptime` command hands it out:
 
 ```c
 void sched_clock_tick(void) {
@@ -116,21 +98,17 @@ u32 sched_uptime(void) {
 }
 ```
 
-注意一个容易踩的坑:`SYS_YIELD` 也调 `sched_tick`(让出就是"假装时间片用
-完"),但**不数钟**。fs 的轮询等待每秒让出成百上千次,若让出也计数,这台
-钟会跑得比墙钟快好几倍——礼貌不是时间流逝。数钟的只有 IRQ0 一条路。
+Note one easy pitfall: `SYS_YIELD` also calls `sched_tick` (yielding is "pretending your time slice is used up") but **does not count the clock**. fs's polling waits yield hundreds or thousands of times per second; if yielding also counted, this clock would run several times faster than the wall clock — courtesy is not the passage of time. Only IRQ0 counts the clock.
 
-这条路径也值得和 `ls` 对照着记:**时间是内核的状态,所以走系统调用直达;
-文件是 fs 的状态,所以必须发消息**。路径跟着状态走,是这本书从头到尾的
-同一条判据。
+This path is also worth memorizing next to `ls`: **time is the kernel's state, so it goes straight through a syscall; files are the fs's state, so you must send messages**. The path follows the state — the same criterion from beginning to end of this book.
 
-## 本章文件
+## Files in this chapter
 
 ```
-kernel/sched/sched.h    task 结构、任务表与 API
-kernel/sched/sched.c    占座建任务、轮转、阻塞/唤醒
-kernel/sched/switch.S   switch_to 寄存器换栈
-kernel/sched/prog.c     程序注册表、sched_spawn、ps_snapshot(第 15 章)
+kernel/sched/sched.h    the task struct, the task table and the API
+kernel/sched/sched.c    taking a seat to build a task, round-robin, block/wake
+kernel/sched/switch.S   switch_to register stack swap
+kernel/sched/prog.c     the program registry, sched_spawn, ps_snapshot (Chapter 15)
 ```
 
-下一章:[IPC](/guide/ipc)。
+The next chapter: [IPC](/guide/ipc).

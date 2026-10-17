@@ -1,58 +1,44 @@
-> **中文** | [English](mouse.en.md)
+# 12 · The PS/2 mouse
 
-# 12 · PS/2 鼠标
+Corresponding code: `kernel/mouse.c`, `kernel/vga.c`, `servers/tty/tty.c`
 
-对应代码:`kernel/mouse.c`、`kernel/vga.c`、`servers/tty/tty.c`
+## The second 8042 device
 
-## 第二个 8042 设备
+[Chapter 9](/guide/tty-server) already set the division: keyboard and serial interrupts land in the kernel, and services only know messages. The mouse is the second device behind the same 8042 controller and follows this division exactly (`kernel/mouse.c`). The one extra step it adds is **initialization**: this is the first device in this kernel that has to be "talked into" sending interrupts before it does — it has no driver, only a protocol.
 
-[第 9 章](/guide/tty-server)已经把分工立好了:键盘和串口的中断落在内核,
-服务只认消息。鼠标是同一个 8042 控制器后面的第二台设备,完全照这条分工走
-(`kernel/mouse.c`)。真正多出来的一道手续是**初始化**:这是这个内核里第一台
-要先把对方"说服"了才会开始发中断的设备——它没有驱动,只有协议。
+## The controller: one command byte, two channels
 
-## 控制器:一个命令字节,两个通道
+The 8042 has only two ports: write `0x64` to send a command, read `0x64` to see status; all data goes through `0x60`. Keyboard and mouse share this one data port, and bit 5 of the status word says which device is talking. The controller's own command byte governs three things, and the mouse needs two of them:
 
-8042 只有两个端口:写 `0x64` 发命令,读 `0x64` 看状态;数据全部走 `0x60`。
-键盘和鼠标共用这一个数据口,靠状态字的 bit 5 区分是哪个设备在说话。控制
-器自己的**命令字节**又管三件事,鼠标要用其中两件:
-
-| bit | 作用 |
+| bit | What it does |
 | --- | --- |
-| 0 | 键盘的 irq 出口 |
-| 1 | 鼠标的 irq 出口(IRQ12) |
-| 5 | 置 1 会**停住鼠标时钟**;必须清掉鼠标才能工作 |
+| 0 | the keyboard's IRQ line |
+| 1 | the mouse's IRQ line (IRQ12) |
+| 5 | set to 1 it stops the mouse clock; it must be cleared or the mouse will not work |
 
-命令字节要边读边改:
+The command byte has to be read and then modified:
 
 ```c
-outb(PS2_CMD, CMD_GET_CB);            /* 0x20:读命令字节 */
+outb(PS2_CMD, CMD_GET_CB);            /* 0x20: read the command byte */
 wait_read(&cb);
-cb |= 0x01 | 0x02;                    /* irq1 与 irq12 都放出去 */
-cb &= (u8)~0x20;                      /* 鼠标时钟恢复 */
-outb(PS2_CMD, CMD_SET_CB);            /* 0x60:写回 */
+cb |= 0x01 | 0x02;                    /* let both irq1 and irq12 through */
+cb &= (u8)~0x20;                      /* the mouse clock runs again */
+outb(PS2_CMD, CMD_SET_CB);            /* 0x60: write it back */
 outb(PS2_DATA, cb);
 ```
 
-(节选里省去了每次 `outb` 前的 `wait_write`——真实代码每一步都带,
-等不到控制器就报错退场。)
+(The excerpt omits the wait_write before each outb — the real code carries it on every step; if the controller does not come, it reports the error and leaves.)
 
-改的时候两台设备都先按停(`0xAD`/`0xA7`),否则半字节的输入会被当成击键。
-最后 `0xAE` 和 `0xA8` 各回拨一次——`0xA8` 除了重新放开鼠标时钟,还是
-"打开 aux 口"的开关。注意 8042 这一层只管放行;真正的中断出口在 8259,
-那半在 `pic_remap` 里完成:从属 PIC 上只开 IRQ12 这一条线,余下全灭,
-理由和[第 3 章](/guide/interrupts)讲键盘时那条一致——敞着没人管的线,
-信号一来就穿空门进异常。
+While modifying, both devices are paused first (`0xAD`/`0xA7`), otherwise half-byte input gets mistaken for keystrokes. Finally `0xAE` and `0xA8` are dialed back once each — besides releasing the mouse clock again, `0xA8` is also the switch that "opens the aux port". Note that the 8042 layer only handles letting traffic through; the real interrupt outlet is the 8259, and that half is finished in `pic_remap`: on the slave PIC only the IRQ12 line is opened, all the rest are off. The reason is the same as the one given for the keyboard in [Chapter 3](/guide/interrupts) — a line left open with no one managing it: the moment a signal arrives it walks straight through an empty gate into an exception.
 
-## 握手:三条命令,三个应答
+## The handshake: three commands, three replies
 
-鼠标自己的协议走 aux 通道:往 `0x64` 写 `0xD4`,**下一个** `0x60` 的写才
-算地址到鼠标;读应答要一直等到 `0xFA`:
+The mouse's own protocol goes through the aux channel: write `0xD4` to `0x64`, and only the **next** write to `0x60` counts as addressed to the mouse; reading a reply has to wait until `0xFA`:
 
 ```c
 static int mouse_cmd(u8 cmd) {
     if (!wait_write()) return 0;
-    outb(PS2_CMD, AUX_SELECT);        /* 0xD4:下一个 0x60 写给鼠标 */
+    outb(PS2_CMD, AUX_SELECT);        /* 0xD4: the next 0x60 write goes to the mouse */
     if (!wait_write()) return 0;
     outb(PS2_DATA, cmd);
     for (int i = 0; i < POLL_SPINS; i++) {
@@ -64,9 +50,7 @@ static int mouse_cmd(u8 cmd) {
 }
 ```
 
-顺序是固定的:先 `0xF6` 回到默认参数,再 `0xF4` 打开数据上报,最后 `0xF2`
-问一句"你是谁",读回设备 ID。前两条各有一个应答,**没应答,打印一行然后
-放弃**;第三条例外——身份问不出来就记作 `0xFF` 照报,初始化照走:
+The order is fixed: first `0xF6` to return to the default parameters, then `0xF4` to turn on data reporting, and finally `0xF2` to ask "who are you" and read back the device ID. Each of the first two has one reply — no reply, print one line and give up; the third is the exception — if the identity cannot be got out of it, record `0xFF` and report it anyway, initialization proceeds as normal:
 
 ```c
 if (!mouse_cmd(MOUSE_ENABLE_DATA)) {
@@ -75,58 +59,45 @@ if (!mouse_cmd(MOUSE_ENABLE_DATA)) {
 }
 ```
 
-这一步值得单独说:鼠标初始化失败的静默表现,和"内核别处有 bug"一模一样。
-所以每个等待都有上限(轮询 10 万次),超时就如实上报,机器照常往下走——
-没有鼠标,其他一切照常。设备 ID 非 0 也打印但不拦路:主机不发起滚轮启用
-序列的话,连滚轮鼠标都自报 `0x00`;报出别的值说明它已被切进扩展模式,而
-不启用扩展协议,它发的仍是三字节包。
+This step deserves a word of its own: the silent behavior when mouse initialization fails is exactly the same as "there is a bug somewhere else in the kernel". So every wait has an upper bound (100,000 poll spins); on timeout it reports the truth and the machine carries on as before — no mouse, everything else as normal. A device ID other than 0 is also printed but does not block: if the host never runs the scroll-wheel enable sequence, even a scroll-wheel mouse reports `0x00`; reporting a different value means it has already been switched into extended mode, and while the extended protocol is not enabled it still sends three-byte packets.
 
-## 数据包:三个字节,一份样本
+## Data packets: three bytes, one sample
 
-中断到的是一条字节流,不是一个个现成的事件。三个字节凑成一包:
+What the interrupt gets is a byte stream, not ready-made events one by one. Three bytes make one packet:
 
-| 字节 | bit | 含义 |
+| Byte | bit | Meaning |
 | --- | --- | --- |
-| 0 | 0,1,2 | 左 / 右 / 中 键 |
-| 0 | 3 | 恒为 1,同步标志 |
-| 0 | 6,7 | x / y 位移溢出 |
-| 1 | 全字节 | dx,二补码 |
-| 2 | 全字节 | dy,二补码,正数表示**向上** |
+| 0 | 0,1,2 | left / right / middle button |
+| 0 | 3 | always 1: the sync flag |
+| 0 | 6,7 | x / y displacement overflow |
+| 1 | whole byte | dx, two's complement |
+| 2 | whole byte | dy, two's complement; positive means up |
 
-同步标志是这条字节流唯一的重新对齐机会:丢包中间一个字节,后面两个就全
-对不上了。ISR 里因此只在第一字节检查 bit 3,对不上就丢掉重数:
+The sync flag is this byte stream's only chance to re-align: lose one byte in the middle of a packet and the following two no longer line up at all. So in the ISR bit 3 is checked on the first byte only; if it does not match, drop it and count again:
 
 ```c
-if (pkt_at == 0 && !(b & 0x08)) return;      /* 同步位丢了,重数 */
+if (pkt_at == 0 && !(b & 0x08)) return;      /* sync bit lost, count again */
 pkt[pkt_at++] = b;
 if (pkt_at < 3) return;
 pkt_at = 0;
 
-int dx = (int)(pkt[1] ^ 0x80) - 0x80;         /* 符号扩展到整字 */
+int dx = (int)(pkt[1] ^ 0x80) - 0x80;         /* sign-extend to a full int */
 int dy = (int)(pkt[2] ^ 0x80) - 0x80;
 ```
 
-`^0x80 - 0x80` 是二补码低字节扩位的一种写法:翻转符号位再减它,正负值都
-对,比"看 bit 7 再减 256"少一个分支。
+`^0x80 - 0x80` is one way to sign-extend a two's complement low byte: flip the sign bit and then subtract it, and both positive and negative values come out right — one branch fewer than "look at bit 7 and then subtract 256".
 
-溢出位是硬件在说"计数器超出了 ±255,这个数字不可信"。这个内核里不假装
-知道答案:直接归零,把按钮位照旧报出去——**上报一个假的位移比不报更糟**,
-因为调用方无从分辨。另外协议里的 y 向上为正,屏幕的行号向下增长,送进
-光标前取一次反。
+The overflow bits are the hardware saying "the counter ran past ±255, this number is not trustworthy". This kernel does not pretend to know the answer: it zeroes the displacement outright and still reports the button bits as usual — reporting a fake displacement is worse than reporting nothing, because the caller has no way to tell the difference. Also, in the protocol y is positive upward while the screen's row numbers grow downward, so it is inverted once before going into the cursor.
 
-## 光标:一次移动,只动两个格子
+## The cursor: one move touches exactly two cells
 
-文本缓冲上的块状光标,借的是**格子本身**:字符原样留着,只把属性字节翻成
-高亮。这样就得到一个严格的"借—还"事务——离开时把存下的原样放回去,落点
-再把新格子借过来,一次移动只碰两个格子,屏幕其余部分一个字节都不改。
-越界是**钳住**而不是换行,这是格子数永远是两个的原因:一换行,借的动作
-就跨了整行。
+The block cursor on the text buffer borrows the cell itself: the character stays exactly as it is and only the attribute byte is flipped to the highlight. That gives a strict "borrow-return" transaction — on leaving, the saved original is put back; on the landing cell, the new cell is borrowed in turn. One move touches exactly two cells, and not one other byte of the screen changes. Out of bounds is clamped, not wrapped to the next line — and that is why the cell count is always exactly two: once it wrapped, the borrow would jump a whole row.
 
 ```c
-#define CURSOR_ATTR 0x70                /* 黑字白底:高亮 */
+#define CURSOR_ATTR 0x70                /* black-on-white: the highlight */
 
 void vga_mouse_move(int dx, int dy) {
-    vga[cur_y * COLS + cur_x] = cur_saved;      /* 把借的还回去 */
+    vga[cur_y * COLS + cur_x] = cur_saved;      /* give the borrowed one back */
     cur_x += dx;
     cur_y += dy;
     if (cur_x < 0) cur_x = 0;
@@ -137,14 +108,11 @@ void vga_mouse_move(int dx, int dy) {
 }
 ```
 
-已知的一处简化,写在这里免得后面的人再撞一次:文本写进光标正占着的那一格
-时,`cur_saved` 里存的就是旧内容了,下次移动会把旧字写回去。真机上要么
-在 `vga_putc` 里顺手刷新光标,要么让光标跟着行尾走——这个内核没做,屏幕
-上会看到光标偶尔"吃掉"一帧旧影。
+One known simplification, written down here so the next person does not run into it again: when text is written into the cell the cursor is currently occupying, `cur_saved` already holds the old contents, and the next move writes the old character back. On real hardware either refresh the cursor in passing inside `vga_putc`, or let the cursor follow the end of the line — this kernel does neither, and on screen you will see the cursor occasionally "eat" a frame of the old ghost.
 
-## 消息:给 tty 的第五句话
+## The message: the fifth thing said to tty
 
-光标是内核画的,但样本本身也要递出去,和键盘一个通道、同一个收件人:
+The cursor is drawn by the kernel, but the sample itself also has to be delivered, through the same channel as the keyboard and to the same recipient:
 
 ```c
 struct msg m;
@@ -152,44 +120,30 @@ memset(&m, 0, sizeof m);
 m.type = MSG_TTY_MOUSE;
 m.arg0 = dx;
 m.arg1 = dy;
-m.arg2 = pkt[0] & 0x07;               /* 按钮,各占一位 */
+m.arg2 = pkt[0] & 0x07;               /* buttons, one bit each */
 ipc_send_kernel(TID_TTY, &m);
 ```
 
-tty 现在的决定是**丢弃**:`MSG_TTY_GETLINE` 说的是行,shell 说的是行,没有
-接收坐标的一方。决定权在 tty 而不是内核,所以处置写成显式的一支,而不是
-掉进默认分支里悄悄消失——将来要转发,改的就是这一处。shell 完全不知情,
-它的行为一字未变。
+tty's current decision is to drop it: `MSG_TTY_GETLINE` speaks in lines, shell speaks in lines, and there is no party that takes coordinates. The decision belongs to tty rather than the kernel, so the handling is written as an explicit branch instead of quietly disappearing into the default branch — when forwarding is wanted one day, this is the one place to change. shell knows nothing about it; its behavior is not changed by a single character.
 
-顺带一提 ISR 里的另一道闸:键盘有持位格加时钟重试(`char.c` 里那一手),
-鼠标没有,队列满了就丢当前样本。理由不同——击键是离散的,丢一个是真丢;
-运动是连续流,下一帧会覆盖这一帧的结论。**丢得对不对,取决于事件本身会不会
-被下一次取代。**
+One more gate in the ISR while we are at it: the keyboard can hold its cell and retry on the clock (that move in `char.c`); the mouse cannot — when the queue is full, the current sample is dropped. The reason differs — keystrokes are discrete, so losing one is a real loss; motion is a continuous stream, and the next frame overwrites this frame's conclusion. Whether dropping is right depends on whether the event itself will be superseded by the next one.
 
-## 验证:smoke-mouse
+## Verified: smoke-mouse
 
-自动化口径和 `smoke-ps2.sh` 完全一样,只是输入换了设备、证据换了字节:
-monitor 发 `mouse_move 15 6`,屏幕上的光标格必须落在预测的 `(55,18)`——
-即属性字节为 `0x70` 的格子恰好一个;再发 `mouse_move -5 -2`,新落点是
-`(50,16)` 为 `0x70`,而 `(55,18)` 必须回到默认的 `0x07`。**第二个断言才是
-关键**:第一处只证明画了东西,第二处才证明"只动两个格子"。中间夹一组
-`mouse_button 1/0`,再挪一次格子必须照样对上——按钮事件走的是同一条 ISR,
-系统没被它带偏。
+The automation procedure is exactly the same as `smoke-ps2.sh`; only the input changes device and the evidence changes byte: the monitor sends `mouse_move 15 6`, and the cursor cell on screen must land on the predicted (55,18) — that is, exactly one cell whose attribute byte is `0x70`; then send `mouse_move -5 -2`, the new landing cell is (50,16) showing `0x70`, while (55,18) must have gone back to the default `0x07`. **The second assertion is the key one**: the first only proves something was drawn, the second proves "only two cells move". In between sits a `mouse_button 1/0` pair, and one more move must still line up the same way — button events travel the same ISR and the system does not get sidetracked by them.
 
-光标位置是算出来的,不是量出来的:初始化停在中点 `(40,12)`,位移逐帧累加、
-钳制在 80×25 内,所以三次移动的答案在脚本里写死。真机上跑 QEMU 的鼠标看
-的就是这个块。
+The cursor position is computed, not measured: initialization stops at the center (40,12), displacement accumulates frame by frame and is clamped within 80×25, so the answers for all three moves are hardcoded in the script. Running QEMU's mouse on real hardware, what you see is this block.
 
-## 本章文件
+## Files of this chapter
 
 ```
-kernel/mouse.c         8042 握手与命令字节、IRQ12 ISR、三字节解码、消息投递
-kernel/mouse.h         声明
-kernel/vga.c/.h        块状光标的借—还事务与屏幕内钳制
-kernel/intr/intr.c     从属 PIC 上只开 IRQ12 这一条线
+kernel/mouse.c         the 8042 handshake and command byte, the IRQ12 ISR, three-byte decoding, message delivery
+kernel/mouse.h         declarations
+kernel/vga.c/.h        the block cursor's borrow-return transaction and in-screen clamping
+kernel/intr/intr.c     opening only the IRQ12 line on the slave PIC
 servers/tty/tty.h      MSG_TTY_MOUSE
-servers/tty/tty.c      显式丢弃:转发与否是 tty 的决定
-tools/smoke-mouse.sh   冒烟测试:monitor 发事件,VGA 属性字节取证
+servers/tty/tty.c      the explicit drop: whether to forward is tty's decision
+tools/smoke-mouse.sh   smoke test: the monitor sends events, VGA attribute-byte forensics
 ```
 
-下一章:[分页上线](/guide/paging)。
+The next chapter: [Paging comes online](/guide/paging).

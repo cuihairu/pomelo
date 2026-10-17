@@ -1,18 +1,14 @@
-> **中文** | [English](restart.en.md)
+# 15 · Fall down and get back up
 
-# 15 · 倒下与爬起
+Corresponding code: `kernel/sched/prog.c`, `apps/shell/cmd_proc.c`
 
-对应代码:`kernel/sched/prog.c`、`apps/shell/cmd_proc.c`
+## After a crash, who is it that picks it back up
 
-## 崩溃之后,是谁把它扶起来的
+The microkernel's signature promise is only one sentence: a service crashes, the kernel does not die, and you restart that service on its own. Every chapter before this one has been stocking the material for it — an independent page table per service, a kernel that is only an IPC messenger, and a fault scene that kills one and leaves no corpse (a dead task's stack is never resumed). This chapter installs the last piece: **start the program again, by name**.
 
-微kernel的招牌承诺只有一句话:服务崩了,内核不死,把那个服务单独重启一遍。
-前面所有章节都在为此备料——每服务独立页表、内核只当跑腿的 IPC、故障现场杀一个
-不留尸(死任务的栈永不再续)。这一章把最后一块装上:**按名字把程序再启动一次**。
+## The registry: a list of capabilities, not an address book
 
-## 注册表:能力清单,不是地址簿
-
-内核镜像里嵌着六个 blob。启动时 `boot/main.c` 把它们登记进一张表:
+Six blobs are embedded in the kernel image. At boot, `boot/main.c` registers them into one table:
 
 ```c
 prog_add("fs",    _binary_ufs_bin_start,    _binary_ufs_bin_end,
@@ -29,43 +25,33 @@ prog_add("netsh", _binary_unetsh_bin_start, _binary_unetsh_bin_end,
          EFLAGS_USER);          /* the net service's first customer */
 ```
 
-这张表是**能力清单**:任务只能按名字请内核启动一个已注册的程序——给的是词,
-不是地址,所以用户态永远没法让内核去映射任意内存。内核镜像本身就是可信来源,
-注册表把"谁能被启动"钉死在编译期。
+This table is a **list of capabilities**: a task may only ask the kernel by name to start a program that is already registered — what is handed over is a word, not an address, so user mode can never get the kernel to map arbitrary memory. The kernel image itself is the trusted source; the registry nails "who can be started" down at compile time.
 
-## 死服务回到自己的座位
+## A dead service returns to its own seat
 
-`sched_spawn`(kernel/sched/prog.c)挑座位有一条规矩:**先找这个程序的老座位**。
-任务表每个座位记着"谁住过这里",死掉的任务留名不留尸——座位空着,名字还在:
+`sched_spawn` (kernel/sched/prog.c) has one rule for picking a seat: **look first for the program's old seat**. Every seat in the task table records "who has lived here", and a dead task leaves a name but no corpse — the seat is empty, the name is still there:
 
 ```c
 for (int i = 1; i < NTASK; i++)     /* the old seat first */
     if (tasks[i].prog == p && tasks[i].state == ST_FREE) { slot = i; break; }
 ```
 
-于是 fs 死在 1 号位,重启后还是 1 号:**TID 稳定,所有发给 TID_FS 的消息照走不误**。
-"重启服务"因此是完整的恢复故事,而不是一次假装有过的重启。座位满员或名字不
-存在,`spawn` 如实返回 -1,不多做什么。
+So fs dies at seat 1 and after the restart it is still seat 1: **the TID is stable, and every message sent to TID_FS still gets through**. "Restart a service" is therefore a complete recovery story, not a restart that pretends it happened. If the seats are full or the name does not exist, `spawn` returns -1 honestly and does nothing more.
 
-重生还有一条卫生规矩:`task_start` 落地时 `msgq_reset` 把收件箱清到空——上一世
-没读完的信,一封也不留给这一世。TID 稳定是让**活人**找得到门,不是让**旧信**
-投进新门;死掉那轮残留的半截协议,跟着旧生命一起火化。
+Rebirth comes with one hygiene rule too: when `task_start` lands, `msgq_reset` clears the inbox to empty — letters unread from the previous life, not a single one is left for this one. Stable TIDs are what let the **living** find the door, not what let **old letters** be delivered through the new door; the half-finished protocol left over from the dead round is cremated along with the old life.
 
-出生流程因此只剩一条路:`boot/main.c` 也是先 `prog_add` 再 `sched_spawn`——
-开机只是第一个拉幕的,和 shell 里敲的是同一扇门。
+The birth path is therefore reduced to one road: `boot/main.c` goes `prog_add` first and `sched_spawn` second as well — boot is just the first one to pull the curtain, and it is the same door as the one knocked from inside the shell.
 
-## 两面镜子:SYS_PS 和 SYS_SPAWN
+## Two mirrors: SYS_PS and SYS_SPAWN
 
-系统调用表添了两行:
+Two rows are added to the syscall table:
 
 ```c
 SYS_SPAWN    = 7,   /* ebx=name: start a registered program */
 SYS_PS       = 8,   /* ebx=buf, ecx=max: task-table snapshot */
 ```
 
-`SYS_PS` 是只读的镜子:内核把任务表逐座抄给调用方,一行一个
-(`struct ps_entry`:tid、状态、住过的程序名)。`SYS_SPAWN` 是唯一的门。shell
-把它们包成两个命令:
+`SYS_PS` is the read-only mirror: the kernel copies the task table to the caller seat by seat, one line per seat (`struct ps_entry`: tid, state, the program name that lived there). `SYS_SPAWN` is the only door. The shell wraps them into two commands:
 
 ```
 pomelo> ps
@@ -83,29 +69,18 @@ probe is task 4 now
 pomelo> probe: alive at ring 3
 ```
 
-看这一屏:fs 和 tty 都 `blocked`——它们在 `sys_recv` 上睡大觉,等消息上门;
-probe 是 `free`——开机时撞墙被它自己作死的那次,座位空着;`spawn probe` 把
-它扶回 4 号位,它再喊一遍"我还活着",再撞一次墙。**倒下、爬起、再倒下**,全程
-没有重启机器,没有动内核一行状态。smoke 和 nightly 把这三行(两遍 alive、两遍
-kill)列为必查项。
+Look at this screen: fs and tty are both `blocked` — they are asleep on `sys_recv`, waiting for a message to come knocking; probe is `free` — that time at boot when it rammed the wall and killed itself, the seat is empty; `spawn probe` picks it back up at seat 4, it shouts "I am alive" once more and hits the wall once more. **Fall down, get back up, fall down again** — the whole way without rebooting the machine, without touching one line of kernel state. smoke and nightly list these three lines (alive twice, kill twice) as must-checks.
 
-## 顺带修好的一处并发
+## A concurrency fixed along the way
 
-`frame_alloc` 从前裸奔:没有任何关中断保护。以前没人并发用它,相安无事;
-`spawn` 可以从 shell 的系统调用里发起,而时钟随时可能在系统调用中间切走 CPU
-——两个任务同时走进 `pdir_user_new`,同一帧内存就会被判给两个世界。现在分配
-器内外一对 `intr_disable/intr_enable`,座位认领(`task_start`)也关着中断
-做——"检查与占坑必须一口气做完",和[第 4 章](/guide/scheduling)阻塞的原
-则同源。
+`frame_alloc` used to run naked: no interrupt-disabling protection at all. Before, nobody used it concurrently and it was peaceable; `spawn` can be launched from a shell syscall, and the clock can take the CPU away in the middle of a syscall at any moment — two tasks walking into `pdir_user_new` at once, and the same frame of memory would be awarded to two worlds. Now the allocator has one pair of `intr_disable/intr_enable` around it, and taking a seat (`task_start`) is also done with interrupts off — "the check and the grab must happen in one breath", the same source as the principle behind blocking in [Chapter 4](/guide/scheduling).
 
-## 本章文件
+## Files in this chapter
 
 ```
-kernel/sched/prog.c     注册表、sched_spawn、ps_snapshot
-kernel/syscall/syscall.h SYS_SPAWN / SYS_PS 与包装
-apps/shell/cmd_proc.c   ps 与 spawn 命令
+kernel/sched/prog.c     the registry, sched_spawn, ps_snapshot
+kernel/syscall/syscall.h SYS_SPAWN / SYS_PS and their wrappers
+apps/shell/cmd_proc.c   the ps and spawn commands
 ```
 
-下一章没有新的了。把[构建与运行](/guide/build-and-run)里的 nightly 截图跑
-一遍,盯着 `ps` 的输出改一行状态,再 `spawn` 一个回去——微内核的容错故事,
-你已经亲手演过一遍了。
+There is no new chapter after this one. Run the nightly screenshot from [build and run](/guide/build-and-run) end to end, change one line of state while watching the `ps` output, then `spawn` one back — the microkernel's fault-tolerance story, you have just played it through yourself.

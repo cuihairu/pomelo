@@ -1,12 +1,10 @@
-> **中文** | [English](shell.en.md)
-
 # 10 · shell
 
-对应代码:`apps/shell/`
+Corresponding code: `apps/shell/`
 
-## 最小的 REPL
+## The smallest REPL
 
-shell 自己几乎不携带新机制,却是前面所有机制的**总装车间**:
+The shell itself carries almost no new mechanism, yet it is the **assembly plant** of every mechanism before it:
 
 ```c
 void shell_main(void) {
@@ -14,18 +12,17 @@ void shell_main(void) {
     tty_puts("\npomelo shell - type 'help'\n");
     for (;;) {
         tty_puts("pomelo> ");
-        tty_getline(line, sizeof line);       /* 向 tty 服务要一行 */
-        run(line);                            /* 查表分发 */
+        tty_getline(line, sizeof line);       /* ask the tty service for a line */
+        run(line);                            /* look it up and dispatch */
     }
 }
 ```
 
-读一遍这三行,你会发现 shell 没有 `main` 之外的循环、没有中断、没有驱动——
-它只是不停地“要一行、跑一条”。
+Read these three lines once and you find the shell has no loop besides `main`, no interrupts, no drivers — it just goes on "asking for a line, running one".
 
-## 命令分发表
+## The command dispatch table
 
-命令的实现散在多个小文件里,靠一张表收拢:
+The implementations of the commands are scattered across several small files, and one table pulls them together:
 
 ```c
 struct cmd { const char *name; void (*fn)(int argc, char **argv); };
@@ -46,29 +43,17 @@ static const struct cmd cmds[] = {
 };
 ```
 
-`run` 把输入按空格切成 `argv`,线性查表,命中就调用。加一条新命令 = 写一个
-`cmd_xxx` 函数 + 表里加一行,**不用碰 shell 的任何既有代码**。这是把“数据驱动”
-用在最朴素的地方。
+`run` splits the input on spaces into `argv`, walks the table linearly, and calls on a hit. Adding a new command = write a `cmd_xxx` function + one more row in the table, **without touching any existing code in the shell**. That is "data-driven" applied in its plainest place.
 
-`echo` 就是这条规则的最小样板(`cmd_echo.c`):不碰 fs、不碰内核,把 `argv`
-借 tty 说出去就完事——想加自己的命令,照抄它起步。其余命令各按依赖落座:
-`ls`/`cat`/`write` 走 fs,`ps`/`spawn`/`uptime`/`mem` 走系统调用门(第 15 章、第 4 章),
-`clear`/`reboot` 各归其主。看一条命令依赖谁,就知道它的消息会经过谁。
+`echo` is the smallest model of this rule (`cmd_echo.c`): it touches neither fs nor the kernel, it just lends tty to say the `argv` out and that is the end of it — to add your own command, copy it to get started. The other commands each sit by their dependency: `ls`/`cat`/`write` go through fs, `ps`/`spawn`/`uptime`/`mem` go through the syscall gate (Chapter 15, Chapter 4), `clear`/`reboot` each go to their own master. See who a command depends on and you know who its messages will pass through.
 
-## 验证:clear 与 reboot
+## Verified: clear and reboot
 
-表里十条命令,前八条会在串口上留下应答,`smoke.sh` 与 `walkthrough.sh` 逐条
-判分;最后两条不吭声,各配一个专门测试——正因为它们不说话,才要用别的东西
-当证据。`clear` 的应答就是没有应答:它发给 tty 一条消息,tty 回一句
-`SYS_CLEAR` 就把 `0xb8000` 擦了,所以 `smoke-clear.sh` 在串口挂 `null` 的机器上
-用 `sendkey` 敲 `mem`、拍一张 VGA,再敲 `clear` 拍第二张,判的是**第二张图上
-只剩提示符**。`reboot` 更没有应答可言:机器该跟着停,QEMU 带 `-no-reboot` 起,
-真停了就是状态 0,坐到 `timeout` 被掐就是 124——`smoke-reboot.sh` 看的就是这个
-退出状态,串口上的 `rebooting...` 只证明那句提示打出来了。
+Of the ten commands in the table, the first eight leave an answer on the serial port, and `smoke.sh` and `walkthrough.sh` score them one by one; the last two say nothing, so each gets its own dedicated test — precisely because they do not speak, something else has to serve as evidence. `clear`'s answer is the absence of an answer: it sends one message to tty, and tty, replying one `SYS_CLEAR`, wipes `0xb8000`. So `smoke-clear.sh` types `mem` with `sendkey` on a machine whose serial port is attached to null, takes a VGA screenshot, then types `clear` and takes a second one — what is judged is that **the second screenshot shows nothing but the prompt**. `reboot` has no answer at all to speak of: the machine is supposed to stop along with it. QEMU is started with `-no-reboot`, so a real stop is status 0, and sitting until `timeout` kills it is 124 — what `smoke-reboot.sh` watches is exactly this exit status; the `rebooting...` on the serial port only proves that the prompt line got printed.
 
-## 两条文件命令走完 IPC 全程
+## Two file commands walk the whole IPC journey
 
-`cat` 是检验前几章的集成测试:
+`cat` is the integration test for the chapters before:
 
 ```c
 void cmd_cat(int argc, char **argv) {
@@ -77,7 +62,7 @@ void cmd_cat(int argc, char **argv) {
         return;
     }
     int size;
-    int ino = fs_open(argv[1], &size);        /* 问 fs:有这文件吗 */
+    int ino = fs_open(argv[1], &size);        /* ask fs: is there such a file */
     if (ino == FS_REFUSED) return;         /* the reason is already printed */
     if (ino < 0) {
         tty_puts("no such file\n");
@@ -85,7 +70,7 @@ void cmd_cat(int argc, char **argv) {
     }
     char buf[MSG_DATA];
     for (int off = 0; off < size; ) {
-        int n = fs_read(ino, off, buf);       /* 分批取数据 */
+        int n = fs_read(ino, off, buf);       /* take the data back in batches */
         if (n <= 0) break;
         tty_write(buf, n);
         off += n;
@@ -93,37 +78,35 @@ void cmd_cat(int argc, char **argv) {
 }
 ```
 
-`write` 反向走同一条路(`FS_WRITE`),把参数拼成文件内容发过去。
-`ls` 则是一个 `FS_LS` 消息拿到整个目录。看清楚:shell 与文件系统之间**没有一行
-共享代码**,只有消息往返——第 5 章时序图在这里落地成了真代码。
+`write` walks the same road in reverse (`FS_WRITE`), splicing the arguments into file contents and sending them over. `ls` gets the whole directory with a single `FS_LS` message. Look clearly: between shell and the filesystem there is **not one line of shared code**, only messages going back and forth — the sequence diagram of Chapter 5 lands here as real code.
 
-## 一条命令的完整旅程(全书总结)
+## A command's complete journey (summary of the whole book)
 
-以 `cat hello.txt` 为例,从指尖到磁盘:
+Take `cat hello.txt`, from fingertip to disk:
 
 ```
-敲键        → IRQ1 → kernel/intr 桩 → kbd_isr(kernel/char.c)
-            → TTY_CHAR 消息唤醒 tty → 攒行 → 回 TTY_GETLINE
-shell 醒来  → run("cat hello.txt") → cmd_cat
-            → SYS_SEND(FS_OPEN) → int 0x80 → syscall 门 → ipc_send
-fs 醒来     → 查 inode 表 → ata_read(超级块、inode、数据块) → 回消息
-shell 醒来  → SYS_SEND(TTY_PUTS) → tty 回显 → 你看到文件内容
+keystroke    → IRQ1 → kernel/intr stub → kbd_isr(kernel/char.c)
+             → TTY_CHAR message wakes tty → accumulate the line → reply TTY_GETLINE
+shell wakes  → run("cat hello.txt") → cmd_cat
+             → SYS_SEND(FS_OPEN) → int 0x80 → syscall gate → ipc_send
+fs wakes     → look up the inode table → ata_read(superblock, inode, data block) → reply message
+shell wakes  → SYS_SEND(TTY_PUTS) → tty echoes back → you see the file contents
 ```
 
-每一次穿越,都是你已经读过的那几段代码。操作系统没有魔法,只有分工。
+Every crossing is a piece of code you have already read. There is no magic in an operating system, only division of labor.
 
-## 本章文件
+## Files of this chapter
 
 ```
-apps/shell/shell.h      命令表结构与全部包装的声明
-apps/shell/shell.c      REPL 主循环与分发表
-apps/shell/cmd_help.c   help
-apps/shell/cmd_fs.c     ls / cat / write
-apps/shell/cmd_echo.c   echo:最小命令样板
-apps/shell/cmd_sys.c    clear / uptime / mem / reboot
-apps/shell/cmd_proc.c   ps / spawn(第 15 章)
-apps/shell/fsio.c       fs 协议客户端包装(含 MSG_FS_ERR 应答)
-apps/con.h              ring 3 写屏包装:con_write / con_clear / con_puts
+apps/shell/shell.h      the command table struct and the declarations of all wrappers
+apps/shell/shell.c      the REPL main loop and the dispatch table
+apps/shell/cmd_help.c  help
+apps/shell/cmd_fs.c    ls / cat / write
+apps/shell/cmd_echo.c  echo: the smallest command model
+apps/shell/cmd_sys.c   clear / uptime / mem / reboot
+apps/shell/cmd_proc.c  ps / spawn (Chapter 15)
+apps/shell/fsio.c      the fs protocol client wrapper (including the MSG_FS_ERR reply)
+apps/con.h             the ring 3 screen-write wrappers: con_write / con_clear / con_puts
 ```
 
-下一章:[构建与运行](/guide/build-and-run)。
+The next chapter: [Building and running](/guide/build-and-run).

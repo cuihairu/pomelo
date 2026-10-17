@@ -1,73 +1,63 @@
-> **中文** | [English](disk-format.en.md)
+# 07 · The disk format
 
-# 07 · 磁盘格式
+Corresponding code: `servers/fs/format.h`
 
-对应代码:`servers/fs/format.h`
+## Why not just learn ext4
 
-## 为什么不学 ext4
-
-ext4 有日志、有 B+ 树、有 extents,这些是三十年工程打磨,学会它们对理解
-“文件系统”这个概念帮助不大。Pomelo 自己定义一个**三个区域**的格式,几分钟读完,
-却覆盖了文件系统的全部骨架:
+ext4 has a journal, B+ trees, and extents — that is thirty years of engineering polishing, and learning it does not help much with understanding the concept of a "filesystem." Pomelo defines its own **three-region** format instead, readable in minutes, and it nevertheless covers the whole skeleton of a filesystem:
 
 ```
   LBA 0        LBA 1..4           LBA 5 ...
 ┌──────────┬───────────────────┬──────────────────────┐
-│ 超级块    │    inode 表        │       数据区          │
-│ (1 扇区) │  32 × 64 字节      │  512 字节/块,顺序分配  │
+│ superblock│   inode table     │     data region      │
+│ (1 sector)│ 32 × 64 bytes     │ 512 bytes/block,     │
+│          │                   │ allocated in order   │
 └──────────┴───────────────────┴──────────────────────┘
 ```
 
-扇区是 512 字节,这是 ATA 硬件的最小读写单位。LBA(Logical Block Address)
-是扇区的顺序编号,从 0 开始。
+A sector is 512 bytes, and that is the smallest read/write unit of the ATA hardware. LBA (Logical Block Address) is the sequential number of a sector, starting at 0.
 
-## 超级块:整块盘的名片
+## The superblock: the whole disk's business card
 
 ```c
 struct superblock {
-    u32 magic;          /* 'PML1' = 0x31504d50,认错盘就拒载 */
+    u32 magic;          /* 'PML1' = 0x31504d50; if the disk is wrong, refuse to mount */
     u32 n_inodes;       /* 32 */
-    u32 data_start;     /* 数据区从哪个 LBA 开始 = 5 */
-    u32 n_data;         /* 数据区一共多少块 */
+    u32 data_start;     /* which LBA the data region starts at = 5 */
+    u32 n_data;         /* how many blocks the data region has in total */
 };
 ```
 
-挂在磁盘 0 号扇区。fs 服务启动时先读它,校验 `magic`——这是所有真实文件系统
-挂载的第一步。
+It is hung on sector 0 of the disk. When the fs service starts it reads this first and checks `magic` — that is the first step of mounting for every real filesystem.
 
-## inode:一个文件的户口
+## The inode: a file's household registration
 
-inode(index node)记录“这个文件占哪些块、有多大”。我们的 inode 定长 64 字节:
+An inode (index node) records "which blocks this file occupies and how big it is." Our inode is a fixed 64 bytes:
 
 ```c
 struct inode {
-    u32 used;            /* 0 = 空闲槽位 */
-    char name[NAMELEN];  /* 12 字节,文件名定长省事 */
-    u32 size;            /* 字节数 */
-    u32 direct[NDIRECT]; /* 6 个直接块指针:6 个 LBA 号 */
-    u8  pad[64 - 4 - NAMELEN - 4 - NDIRECT * 4];   /* 凑满 64 字节 */
+    u32 used;            /* 0 = a free slot */
+    char name[NAMELEN];  /* 12 bytes; a fixed-length filename saves trouble */
+    u32 size;            /* the number of bytes */
+    u32 direct[NDIRECT]; /* 6 direct block pointers: 6 LBA numbers */
+    u8  pad[64 - 4 - NAMELEN - 4 - NDIRECT * 4];   /* pad it out to 64 bytes */
 };
 ```
 
-`direct[6]` 意味着**一个文件最多 6 块 = 3KB**。真实文件系统会加间接块、二重间接块
-来扩展,思想完全一样:inode 里存不下就存“指向存指针的块”的指针。这里我们停在
-第一层,把 3KB 限制**明明白白写在类型里**。
+`direct[6]` means **a file is at most 6 blocks = 3KB**. Real filesystems add indirect blocks and doubly-indirect blocks to extend this; the idea is exactly the same: when the inode cannot hold the pointers, it stores a pointer to "a block that holds pointers." Here we stop at the first level, and the 3KB limit is **written out plainly in the type**.
 
-## 数据区:拿来就用,顺序分配
+## The data region: take it and use it, allocated in order
 
-写文件时从数据区头往后找第一个全零块,分配之,不维护空闲链表。代价是**删文件
-不会复用空间**(事实上 Pomelo 也没有删除命令),收益是分配代码只有几行。
-自学用的格式,取舍都摊在明面上。
+When writing a file, scan forward from the head of the data region for the first all-zero block, and allocate that one; no free list is kept. The cost is that **deleting a file does not reuse the space** (in fact Pomelo has no delete command either), and the gain is that the allocation code is only a few lines. A format for self-study, with every trade-off laid out in the open.
 
-## 预算
+## The budget
 
-32 个 inode × 64B = 2048B,正好 4 个扇区(LBA 1–4)。加上 1 个超级块扇区,
-元数据开销只有 5 个扇区;数据区从 LBA 5 到镜像末尾(默认 1024 块,约 512KB)。
+32 inodes × 64B = 2048B, exactly 4 sectors (LBA 1–4). Add one superblock sector, and the metadata overhead is only 5 sectors; the data region runs from LBA 5 to the end of the image (1024 blocks by default, about 512KB).
 
-## 本章文件
+## Files of this chapter
 
 ```
-servers/fs/format.h   以上三个结构 + 常量,全部的格式定义
+servers/fs/format.h   the three structures above plus the constants, all of the format definitions
 ```
 
-磁盘格式本身没有可执行代码,下一章看操作它的[文件服务](/guide/fs-server)。
+The disk format itself has no executable code; the next chapter looks at the [file service](/guide/fs-server) that operates it.

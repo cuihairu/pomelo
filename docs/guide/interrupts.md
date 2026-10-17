@@ -1,47 +1,42 @@
-> **中文** | [English](interrupts.en.md)
+# 03 · Interrupt dispatch
 
-# 03 · 中断分发
+Corresponding code: `kernel/intr/`
 
-对应代码:`kernel/intr/`
+## Interrupts are the reason the kernel exists
 
-## 中断是内核存在的理由
+Without interrupts, the kernel is just a piece of code that is called once and then sleeps. Interrupts push "something happened out there" into the CPU, and only then does the kernel get a chance to react. In pomelo's kernel, only two things bear directly on interrupts: **confirm the source** and **hand the event to the task waiting on it**.
 
-没有中断,内核只是一段被调用一次就睡着的代码。中断把“外面出事了”这件事塞进 CPU,
-内核才有机会反应。Pomelo 的内核只有两件事和中断直接相关:**确认源头**和**把事件
-交给等在它上面的任务**。
+## The IDT: a door-plate table of 256 entries
 
-## IDT:一张 256 项的门牌表
-
-CPU 收到中断号 `n`,就查 IDT 的第 `n` 项,跳到对应的处理入口。我们只需要两种门:
-异常(除零、页错误)和硬件中断。`kernel/intr/idt.c` 把每一项都填成一个汇编桩:
+When the CPU receives interrupt number `n`, it looks up the `n`th entry of the IDT and jumps to the corresponding handler entry. We only need two kinds of gate: exception (divide by zero, page fault) and hardware interrupt. `kernel/intr/idt.c` fills every entry with an assembly stub:
 
 ```c
 void idt_set(int n, u32 handler, u16 sel, u8 flags) {
     idt[n].offset_lo = handler & 0xffff;
     idt[n].selector  = sel;
     idt[n].zero      = 0;
-    idt[n].flags     = flags;          /* 0x8E = 存在的 32 位中断门 */
+    idt[n].flags     = flags;          /* 0x8E = an existing 32-bit interrupt gate */
     idt[n].offset_hi = handler >> 16;
 }
 ```
 
-`stubs.S` 里为每个**实际使用**的向量各写一个几行的桩,统一压入向量号再跳进公共入口:
+`stubs.S` writes one few-line stub for each **actually used** vector, all of them pushing the vector number and then jumping to a common entry:
 
 ```asm
 .macro STUB vec
 intr_stub_\vec:
-    pushl $0                  # 有的异常自带错误码,普通中断补 0 对齐
+    pushl $0                  # some exceptions carry their own error code; plain interrupts push 0 to align
     pushl $\vec
     jmp   intr_common
 .endm
 
-STUB 32                       # 时钟(PIT)
-STUB 33                       # 键盘
-STUB 36                       # 串口
-STUB 44                       # 鼠标(IRQ12)
-STUB 128                      # 系统调用门
+STUB 32                       # clock (PIT)
+STUB 33                       # keyboard
+STUB 36                       # serial port
+STUB 44                       # mouse (IRQ12)
+STUB 128                      # the syscall gate
 
-# 13 和 14 由 CPU 推错误码,桩里不再补 0(见下文)
+# 13 and 14 get their error code pushed by the CPU, so the stubs push no 0 (see below)
 intr_stub_13:
     pushl $13
     jmp   intr_common
@@ -50,52 +45,32 @@ intr_stub_14:
     jmp   intr_common
 ```
 
-CPU 异常(0–31 号)大多不逐个解码:内核态遇到异常就意味着出了大错,共用
-一个桩,打一行 PANIC 然后停机。两个例外是 13(general protection)和
-14(page fault)——它们自带错误码,而且可能是 ring 3 任务惹的祸,得逐个
-查明再决定杀谁,见[第 14 章](/guide/ring3)。`intr_common` 把现场保存成
-`regs` 结构,交给 C 的分发函数。
+CPU exceptions (numbers 0–31) are not decoded one by one for the most part: an exception in kernel mode means something big has gone wrong, so they share one stub, print one line of PANIC and halt. The two exceptions are 13 (general protection) and 14 (page fault) — they carry their own error codes, and the fault may have been caused by a ring 3 task, so each has to be investigated before deciding who to kill; see [Chapter 14](/guide/ring3). `intr_common` saves the scene into a `regs` structure and hands it to the C dispatch function.
 
-## 门上的三个比特:0x8E、0xEE 与一盏 cli
+## Three bits on the gate: 0x8E, 0xEE, and one cli
 
-门描述符的 flags 字节值得逐位读一遍。本内核用到的两种:
+The flags byte of the gate descriptor is worth reading bit by bit. This kernel uses two of them:
 
-- `0x8E`:存在、DPL=0、32 位**中断门**——异常与全部硬件中断。
-- `0xEE`:同上,但 DPL=3。全表只有 `int 0x80` 这扇门 ring 3 敲得动。
+- `0x8E`: present, DPL=0, 32-bit **interrupt gate** — exceptions and all hardware interrupts.
+- `0xEE`: the same, but DPL=3. In the whole table only this one gate, `int 0x80`, can be knocked on from ring 3.
 
-类型一律是 0xE(中断门):CPU 跨过门槛时**自己关掉 IF**。所以用户代码既不能
-碰硬件门(DPL=0,敲了就是 #GP),也不能带着开着的中断进内核。
+The type is always 0xE (interrupt gate): when the CPU crosses the threshold it **clears IF by itself**. So user code can neither touch the hardware gates (DPL=0, knock and you get #GP) nor enter the kernel with interrupts still on.
 
-中断状态真正的故事在**出口**。凡是会睡的原语——`ipc_recv`、`irq_wait`——
-醒来时都把 IF 重新打开:刚收到唤醒的驱动回到 ring 3 还得继续被中断,不然它
-清收件箱的那几微秒里时钟不跳、串口不响;任何任务也不该把一句陈年的 `cli`
-带回用户态。于是 handler 从 `intr_dispatch` 返回时,IF 开不开,取决于它
-睡没睡着过。
+The real story of interrupt state is at the **exit**. Every primitive that can sleep — `ipc_recv`, `irq_wait` — reopens IF when it wakes: a driver that just got the wake-up and goes back to ring 3 still has to keep being interrupted, otherwise during the few microseconds it spends clearing its inbox the clock does not tick and the serial port stays silent; and no task should carry a stale `cli` back into user mode either. So when a handler returns from `intr_dispatch`, whether IF is on depends on whether it ever slept.
 
-而 `intr_common` 的尾部要从栈上拆现场:`popa` 读回寄存器,`iret` 弹出
-EIP/CS/EFLAGS。此刻若 IF 开着,一记时钟正好卡在 `call` 返回与 `popa`
-之间,它的中断帧就压进了寄存器飞地正中——这个任务醒来抱着的寄存器是别人的,
-最后 `iret` 走错栈,在自己的地址上撞出 #GP。这个坑真踩过:修掉之前,新烧的
-镜像第一轮 smoke-net 就按到一具"撕裂"的中断帧。
+And the tail of `intr_common` has to take the scene apart from the stack: `popa` reads the registers back, `iret` pops EIP/CS/EFLAGS. If IF happens to be on at that moment, one clock tick lands exactly between the `call` returning and the `popa`, and its interrupt frame gets pressed straight into the middle of the register enclave — the registers this task wakes up holding belong to someone else, and in the end `iret` walks the wrong stack and slams into #GP on its own address. We really did step in this pitfall: before it was fixed, a freshly burned image hit a "torn" interrupt frame in its very first round of smoke-net.
 
-修法不是把每个原语的出口都改成关中断(那是把问题摊到每一处),而是在
-`intr_common` 顶部点一盏 `cli`:**拆现场的那几行指令,永远原子**。代价是
-每次中断多一条指令;收益是尾部的正确性不再依赖任何 handler 的睡前习惯。
-`iret` 会从帧里恢复 EFLAGS,这盏 cli 不会漏进 ring 3。另外还装了一道哨兵:
-`iret` 前检查将要弹出的 CS 是不是本内核发过的两种(`0x08` / `0x1b`),不是
-就说明早先有写入摸到了这一帧;`sched_seat` 按栈地址认出帧落在哪个座位,
-`torn_frame` 把原始帧连同座位号摊开在串口上再停机——同一个问题再来,
-现场是自带的。
+The fix is not to change every primitive's exit to disable interrupts (that would spread the problem to every spot), but to light one `cli` at the top of `intr_common`: **the few instructions that take the scene apart are forever atomic**. The price is one extra instruction per interrupt; the payoff is that the correctness of the tail no longer depends on any handler's bedtime habits. `iret` restores EFLAGS from the frame, so this cli does not leak into ring 3. One sentinel was installed too: before `iret` it checks whether the CS about to be popped is one of the two this kernel issues (`0x08` / `0x1b`); if not, some earlier write has reached this frame. `sched_seat` recognizes from the stack address which seat the frame lands in, and `torn_frame` spreads the raw frame together with the seat number out on the serial port before halting — if the same problem comes again, the scene comes with it.
 
-## 分发:先应答,再唤醒
+## Dispatch: answer first, then wake
 
 ```c
 void intr_dispatch(struct regs *r) {
-    if (r->int_no == 0x80) {          /* 0x80 号 = 系统调用门 */
+    if (r->int_no == 0x80) {          /* 0x80 = the syscall gate */
         syscall_entry(r);
         return;
     }
-    if (r->int_no == 14) {             /* 页错误 */
+    if (r->int_no == 14) {             /* page fault */
         task_fault(r, "page fault", cr2_fault());
         return;
     }
@@ -105,63 +80,44 @@ void intr_dispatch(struct regs *r) {
     }
     if (r->int_no >= 32 && r->int_no < 48) {
         u32 irq = r->int_no - 32;
-        irq_dispatch(irq);            /* 认领了这条线的,先跑它的三行 */
+        irq_dispatch(irq);            /* whoever claimed this line runs its three lines first */
         if (!irq_owned(irq))
-            pic_eoi(irq);             /* 内核自己的线:当场收下 */
-        irq_raise(irq);               /* 再唤醒在等着它的任务 */
+            pic_eoi(irq);             /* the kernel's own line: take it on the spot */
+        irq_raise(irq);               /* then wake the task waiting on it */
         if (irq == IRQ_PIT) {
-            char_retry();             /* tty 队列没收下的输入,再试一次 */
-            sched_clock_tick();       /* 心跳 + 抢占 */
+            char_retry();             /* input the tty queue did not take, try once more */
+            sched_clock_tick();       /* heartbeat + preemption */
         }
     }
 }
 ```
 
-EOI 的归属跟着线的归属走:键盘、鼠标、时钟这些内核自留的线,内核当场
-EOI;用户态驱动认领的线(网卡那种),内核**故意不发**——电平触发下得先
-让设备闭嘴再重新武装 8259,而只有握着硬件的驱动知道怎么让它闭嘴,驱动
-清完设备再走 `sys_irq_eoi`。顺序要是颠倒,8259 会立刻把同一条电平重新
-递上来,一个中断变成一场风暴。
+The ownership of the EOI follows the ownership of the line: lines the kernel keeps for itself — keyboard, mouse, clock — the kernel EOIs on the spot; lines claimed by user-mode drivers (the network card kind), the kernel **deliberately does not send it** — under level triggering you have to shut the device up first and then re-arm the 8259, and only the driver holding the hardware knows how to shut it up; the driver clears the device and then goes through `sys_irq_eoi`. Reverse the order and the 8259 immediately delivers the same level again, turning one interrupt into a storm.
 
-再解释一下 PIC 重映射(`pic_remap`):默认 IRQ0–15 映射到 0–15 号,会和 CPU 异常
-(0–31 号)撞车。我们把它们整体挪到 32–47 号,井水不犯河水。
+One more word on the PIC remap (`pic_remap`): by default IRQ0–15 map to vectors 0–15, which collide with the CPU exceptions (0–31). We shift the whole range to 32–47 — well water and river water each keep to themselves.
 
-`pic_remap` 还有一手:只打开**有人认领**的线(时钟、键盘、串口、级联),其余全部
-屏蔽。这不是洁癖——一条敞着没人管的中断线,信号一到就会穿过空的 IDT 门,直接
-#GP 掀翻内核。调磁盘驱动时吃过这个亏:IRQ14 的第一个命令刚完成,系统就进了
-异常,错误码 `0x172` = 46×8+2,正是“空门”的签名。
+`pic_remap` has one more trick: it opens only the lines **someone has claimed** (clock, keyboard, serial, cascade) and masks all the rest. This is not fussiness — an open interrupt line with no one managing it lets a signal walk straight through an empty IDT gate and flip the kernel with #GP on the spot. We paid for this one while debugging the disk driver: the moment IRQ14's first command completed, the system went into an exception, error code `0x172` = 46×8+2 — exactly the signature of an "empty gate".
 
-## 小机制:irq_wait,把中断变成“可等待的事件”
+## A small mechanism: irq_wait, turning interrupts into "waitable events"
 
-驱动不该在中断处理函数里干活。真正的做法是:中断只做“唤醒”,干活的任务在别处等。
-内核提供原语:
+A driver should not do work inside the interrupt handler. The real arrangement is: the interrupt only does the "wake-up", and the task that does the work waits elsewhere. The kernel provides the primitive:
 
 ```c
-void irq_wait(u32 mask);   /* 阻塞,直到 mask 里任一 IRQ 报告 */
+void irq_wait(u32 mask);   /* block until any IRQ in mask reports */
 ```
 
-第一个用户是网卡驱动([第 16 章](/guide/net)):它的主循环把"自己的中断线 +
-时钟"一起掩进 mask 睡下去——被设备唤醒就收包,被时钟唤醒就检查超时,一次
-等待,两个闹钟。一条线上睡的不是一个人,而是**一排席位位图**:每个座位一位,
-中断来了整排一起叫醒;只有全空的线才把事件记成"待决",泊给下一个路过的人。
-(键盘和串口没走这条路——它们的中断在 kernel/char.c 里被直接变成消息投给
-tty,见[第 9 章](/guide/tty-server)。)
+The first user is the network card driver ([Chapter 16](/guide/net)): its main loop masks "its own interrupt line + the clock" together into the mask and sleeps — woken by the device it collects packets, woken by the clock it checks timeouts; one wait, two alarms. What sleeps on one line is not one person but **a row of seat bits**: one bit per seat, and when the interrupt arrives the whole row is woken together; only a completely empty line records the event as "pending" and docks it for the next passerby. (The keyboard and serial port do not go this way — their interrupts are turned directly into messages in kernel/char.c and tossed to the tty; see [Chapter 9](/guide/tty-server).)
 
-`irq_wait` 有两个提前返回的出口:消息到了(调用方得去处理收件箱),或者——
-收件箱里**现在就有没读的消息**。第二条是血泪换来的:一个任务若在“清空收件箱”
-和“入睡”两步之间被时钟打断,醒来后会带着没读的信睡死过去,发信人只能干等。
-检查与入睡必须关中断一口气做完——**永远不要带着没读的信入睡**。这样中断处理
-函数里没有多余逻辑,“等设备”在服务眼里就是一次普通的阻塞调用——微内核里,
-中断也被抽象成了可等待的对象。
+`irq_wait` has two early-return exits: a message arrived (the caller has to go handle the inbox), or — the inbox **right now holds an unread message**. The second was bought with blood and tears: if a task gets cut off by the clock between the two steps "empty the inbox" and "go to sleep", it will wake up and sleep to death still holding unread letters, and the sender can only wait in vain. The check and the sleep must be done in one breath with interrupts disabled — **never go to sleep with unread letters**. This way there is no extra logic in the interrupt handler, and "wait for the device" looks like one ordinary blocking call in the service's eyes — in a microkernel, even interrupts are abstracted into waitable objects.
 
-## 本章文件
+## Files in this chapter
 
 ```
-kernel/intr/intr.h     IRQ 原语与 regs 结构
-kernel/intr/idt.c      IDT 填充与加载
-kernel/intr/stubs.S    实际使用的向量各一个桩
+kernel/intr/intr.h     IRQ primitives and the regs structure
+kernel/intr/idt.c      filling and loading the IDT
+kernel/intr/stubs.S    one stub per actually used vector
 kernel/intr/intr.c     pic_remap / pit_init / intr_dispatch / torn_frame / panic
-kernel/intr/irq.c      认领表、等待者集合、待决位与 irq_wait
+kernel/intr/irq.c      claim table, waiters set, pending bits and irq_wait
 ```
 
-下一章:[调度](/guide/scheduling)。
+The next chapter: [Scheduling](/guide/scheduling).

@@ -1,26 +1,20 @@
-> **中文** | [English](tty-server.en.md)
+# 09 · The terminal service
 
-# 09 · 终端服务
+Corresponding code: `servers/tty/`, `kernel/char.c`
 
-对应代码:`servers/tty/`、`kernel/char.c`
+## Screen and keyboard, split in two
 
-## 屏幕和键盘,一分为二
+The hardware of this chapter changes hands. The input side — the keyboard (IRQ1) and the serial port (IRQ4) — moves into the kernel's `kernel/char.c`: the interrupt handler has to run in "the copy of the world that the current cr3 points at," and which task is running at the time is anyone's guess, so code that touches ports and takes over IRQs can only live in the kernel, which all address spaces share (the reason is explained fully in [Chapter 14](/guide/ring3)). The output side — VGA and COM1 — is for any task nothing but one syscall: `sys_write`.
 
-这一章的硬件换了主人。输入端——键盘(IRQ1)和串口(IRQ4)——住进了内核的
-`kernel/char.c`:中断函数必须跑在"当前 cr3 指向的那份世界"里,而当时哪个任务
-在跑说不好,所以碰端口、认 IRQ 的代码只能住进所有地址空间共有的内核(缘由在
-[第 14 章](/guide/ring3)讲透)。输出端——VGA 和 COM1——对任何任务都只是
-一个系统调用:`sys_write`。
+So tty becomes a pure ring 3 program that does not touch a single port and only knows messages:
 
-于是 tty 成了纯粹的 ring 3 程序,一个端口都不碰,只认消息:
+- Receives `TTY_CHAR` from the kernel: one character at a time, from the keyboard or from the serial port;
+- Says only three things to the outside: print (`TTY_PUTS`), clear the screen (`TTY_CLEAR`), ask for a line (`TTY_GETLINE`);
+- Output goes through `sys_write`; it does not know how the screen lights up.
 
-- 从内核收 `TTY_CHAR`:一次一个字符,来自键盘或串口;
-- 对外只说三句话:打印(`TTY_PUTS`)、清屏(`TTY_CLEAR`)、要一行(`TTY_GETLINE`);
-- 输出走 `sys_write`,屏幕怎么点亮的它不知道。
+## Input: an interrupt becomes a message
 
-## 输入:中断变消息
-
-内核里的中断函数短得不能再短——查表、变成字符、投一条消息:
+The interrupt handler in the kernel cannot get any shorter — look up the table, turn it into a character, deliver a message:
 
 ```c
 static void tty_char(char c) {
@@ -28,16 +22,13 @@ static void tty_char(char c) {
     memset(&m, 0, sizeof m);
     m.type = MSG_TTY_CHAR;
     m.data[0] = c;
-    ipc_send_kernel(TID_TTY, &m);  /* 内核寄的信,src=0 */
+    ipc_send_kernel(TID_TTY, &m);  /* sent by the kernel, src=0 */
 }
 ```
 
-串口走同一条路:QEMU 把 `-serial stdio` 收到的字节交给同一个投递函数——所以
-这台机器没有 GUI 键盘也能完整驱动。**中断函数只做三行**(读端口、解码、投递),
-真正的逻辑全部留在能睡能醒的任务里;只是如今“等输入”不再是 tty 睡在 IRQ 上,
-而是内核把字符直接送上门。
+The serial port goes down the same path: QEMU hands the bytes that `-serial stdio` receives to the same delivery function — so this machine can be driven completely even without a GUI keyboard. **The interrupt handler does only three lines** (read the port, decode, deliver), and the real logic stays entirely in a task that can sleep and wake; it is just that "waiting for input" no longer means tty sleeping on the IRQ, but the kernel delivering the character right to its door.
 
-投递之前还有一道闸,是这一章最容易被忽略的一行:
+Before delivery there is one more gate, the most easily overlooked line of this chapter:
 
 ```c
 static void uart_isr(void) {
@@ -47,16 +38,11 @@ static void uart_isr(void) {
 }
 ```
 
-tty 的收件箱是有限的,而 tty 只在调度器轮到它时才排空——往终端里**粘贴一整行**
-(QEMU 的 UART FIFO 也只有 16 字节)会瞬间超载。规矩因此定死:**队列装不下的
-字节,一个都不许从 FIFO 里读出来**。留在 FIFO 里的字节不是丢失,读出来再丢掉
-才是;时钟中断每次都会替积压的输入重试(`char_retry`),键盘另有 1 个持位格。
-这不是新发明的机制,只是把 tty 章开头那句承诺兑现到底:读的人再慢,也不能让
-打字的人丢一次击键。
+tty's inbox is finite, and tty only drains it when the scheduler comes around to it — pasting a whole line into the terminal (QEMU's UART FIFO is also only 16 bytes) overloads it in an instant. The rule is therefore nailed down: **a byte that the queue cannot hold is not allowed to be read out of the FIFO at all**. Bytes left in the FIFO are not lost; reading them out and then throwing them away is what loses them; the clock interrupt retries the backed-up input every time (`char_retry`), and the keyboard has its own 1-slot holding cell. This is not a newly invented mechanism, just the promise at the start of the tty chapter carried all the way through: however slow the reader is, the typist must not lose a keystroke.
 
-## 行协议:shell 要的是行,不是字符
+## The line protocol: shell wants lines, not characters
 
-shell 不想一个字符一个字符地处理退格。tty 把这些脏活揽下来:
+shell does not want to handle backspace one character at a time. tty takes this dirty work on itself:
 
 ```c
 static void handle_char(char c) {
@@ -82,11 +68,9 @@ static void handle_char(char c) {
 }
 ```
 
-`deliver` 检查:有没有 shell 正阻塞在 `TTY_GETLINE` 上?有,行一攒完就立刻
-回消息;没有,把整行存进缓冲,等 shell 来要。**生产者和速度解耦**——你打字
-再快,shell 再慢,行缓冲都兜着。
+`deliver` checks: is a shell blocking on `TTY_GETLINE` right now? If yes, the moment a line is finished the message goes back immediately; if no, the whole line is stashed in the buffer and waits for shell to come and ask for it. **Producer and speed are decoupled** — you type as fast as you like, shell is as slow as it likes, the line buffer catches all of it.
 
-## 主循环:睡到内核送信来
+## The main loop: sleep until the kernel sends a letter
 
 ```c
 void tty_main(void) {
@@ -101,22 +85,18 @@ void tty_main(void) {
 }
 ```
 
-先清空收件箱,再阻塞着睡——醒来第一件事是处理刚到的那条。这个"清完再睡"
-的顺序和[第 3 章](/guide/interrupts)的教训同源:**永远不要带着没读的信入睡**。
+Drain the inbox first, then block and sleep — and the first thing when you wake up is to handle the one that just arrived. This "drain then sleep" ordering comes from the same root as the lesson of [Chapter 3](/guide/interrupts): **never go to sleep holding an unread letter**.
 
-## 回显
+## Echo
 
-你敲的字符会出现在屏幕上,是因为 tty 收到后主动 `put(c)` 回显——不是硬件替它
-做的。退格能抹掉字符,也是 tty 在 `\b` 时输出**退格、空格、再退格**三个字符
-(`put('\b'); put(' '); put('\b')`)——先退一格,用空格盖掉原字,再退回来。
-终端体验的每一处细节,都是这个循环里的一行代码。
+The characters you type show up on the screen because tty proactively `put(c)`s them back when it receives them — not because the hardware does it for it. Backspace can erase a character because tty, on `\b`, outputs **backspace, space, backspace again** — three characters (`put('\b'); put(' '); put('\b')`) — step back one cell, cover the original glyph with a space, and step back again. Every single detail of the terminal experience is one line of code inside this loop.
 
-## 本章文件
+## Files of this chapter
 
 ```
-kernel/char.c/.h     控制台硬件:COM1+PS/2 收进来的成消息,发出去的成系统调用
-servers/tty/tty.h    消息类型(TTY_PUTS / TTY_GETLINE / TTY_CLEAR / TTY_CHAR)
-servers/tty/tty.c    服务循环、行缓冲、应答 shell
+kernel/char.c/.h     console hardware: what comes in from COM1+PS/2 becomes a message, what goes out becomes a syscall
+servers/tty/tty.h    message types (TTY_PUTS / TTY_GETLINE / TTY_CLEAR / TTY_CHAR)
+servers/tty/tty.c    the service loop, the line buffer, answering shell
 ```
 
-下一章:[shell](/guide/shell)。
+The next chapter: [shell](/guide/shell).

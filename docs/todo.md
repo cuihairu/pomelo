@@ -10,6 +10,7 @@
 
 ## 已完成
 
+- [x] vitepress 官方 locales 双语落地(英文 17 页在 docs/ 根、中文 17 页在 docs/zh/,官方语言切换器替代手写切换链接,构建绿;见根 todo.md 2026-10-17 用户令)
 - [x] clear 与 reboot 各有专属冒烟测试,审计表口径改六测(0c135b0,ctest 6/6)
 - [x] 纯文档 push 不再触发主 CI,README 本地测试口径落地(9e08ce3,ctest 4/4)
 - [x] docs 依赖告警清零,pnpm overrides 钉 vite 6.4.3 与 esbuild 0.25.0(a33d004、c2c0017,pnpm audit 零告警)

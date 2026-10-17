@@ -3,25 +3,25 @@ layout: home
 
 hero:
   name: Pomelo
-  text: 一个用来自学内核知识的 i386 简易微内核
-  tagline: C 实现的 i386 小内核 · 边读代码边学操作系统 · 每个目录就是一个概念 · 自学用途,非生产可用
+  text: A small i386 microkernel in C for self-study of kernel internals
+  tagline: A small i386 kernel in C · Read the code and learn the OS at the same time · Each directory is one concept · For self-study, not production use
   actions:
     - theme: brand
-      text: 开始阅读
+      text: Start reading
       link: /guide/intro
     - theme: alt
-      text: 本地跑起来
+      text: Run it locally
       link: /guide/build-and-run
     - theme: alt
-      text: 下载 nightly
+      text: Download nightly
       link: https://github.com/cuihairu/pomelo/releases/tag/nightly
 
 features:
-  - title: 微内核,只有五件事
-    details: 内核里只有中断分发、调度、IPC、系统调用门和分页;文件系统、终端、shell、网络全部是跑在消息传递上的独立任务,各自住在 ring 3 的地址空间里。
-  - title: 目录即教材目录
-    details: boot/ 讲启动,kernel/ 讲内核五件事,servers/ 与 apps/ 讲服务。章节顺序就是代码目录顺序,每段代码都对应一个操作系统概念。
-  - title: 两条命令跑起来
-    details: cmake -B build && cmake --build build,QEMU 直接引导,不需要装 GRUB,不需要做 ISO。
+  - title: A microkernel with only five jobs
+    details: The kernel only has interrupt dispatch, scheduling, IPC, the syscall gate and paging. The filesystem, terminal, shell and network are all standalone tasks that run on top of message passing, each in its own ring 3 address space.
+  - title: The directory tree is the curriculum
+    details: boot/ covers startup, kernel/ covers the five jobs of the kernel, servers/ and apps/ cover the services. The chapter order is the directory order, and each piece of code maps to one operating system concept.
+  - title: Up and running in two commands
+    details: cmake -B build && cmake --build build. QEMU boots directly — no GRUB to install, no ISO to make.
 ---
 
