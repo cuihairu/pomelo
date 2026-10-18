@@ -12,7 +12,6 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: 'Guide', link: '/guide/intro' },
-          { text: 'GitHub', link: 'https://github.com/cuihairu/pomelo' }
         ],
         sidebar: [
           {
@@ -61,7 +60,6 @@ export default defineConfig({
       themeConfig: {
         nav: [
           { text: '教材', link: '/zh/guide/intro' },
-          { text: 'GitHub', link: 'https://github.com/cuihairu/pomelo' }
         ],
         sidebar: [
           {
