@@ -10,6 +10,7 @@
 
 ## 已完成
 
+- [x] zh 首页补镜像语言记忆脚本,修复中文用户点 English 被自动检测弹回的死循环(19f6230,vitepress build 绿,产物逐条核对:picked 双向优先、非 zh 浏览器入 zh 首页回英文根、listener 双向记录)
 - [x] vitepress 官方 locales 双语落地(英文 17 页在 docs/ 根、中文 17 页在 docs/zh/,官方语言切换器替代手写切换链接,构建绿;见根 todo.md 2026-10-17 用户令)
 - [x] clear 与 reboot 各有专属冒烟测试,审计表口径改六测(0c135b0,ctest 6/6)
 - [x] 纯文档 push 不再触发主 CI,README 本地测试口径落地(9e08ce3,ctest 4/4)
@@ -38,6 +39,13 @@
 - 测试/CI/依赖:本地 ctest 6/6 绿(61.1s,含 clear/reboot 新冒烟);ci.yml、docs.yml 最近 run 在 `4a637fe` 均 success,nightly schedule run(2026-10-14 00:33 UTC)三任务绿;`pnpm audit` 零告警。
 - 审计表自漂移:「已核一致」抽样仍记 A10 修复前的 `npm --prefix docs run dev`,与表内 A10 处置结果矛盾;已按两 README 现状(README.md:103、README.zh.md:80)改正,禁词口径复点仍零命中。
 - README 单侧漂移:cdab589 只给 README.md 加语言切换行,README.zh.md 缺镜像;已补并登审计表 A12。远端门禁实证:cbdf8c9、0528d52 两笔纯文档 push 各只触发 docs.yml(均 success),ci.yml 按 paths-ignore 跳过。
+
+## 台账依据(2026-10-19 R2 巡检)
+
+- 新修:zh 首页缺镜像语言记忆脚本——4106ac3 的 click listener 只在英文页注册,浏览器语言为 zh 的用户从中文页点 English 到达英文根页后,会被 navigator.language 自动检测立即 replace 回中文页,UI 层无法停留英文首页;修复=docs/zh/index.md 加对称脚本(19f6230),产物核对见已完成区。
+- nightly 观察:2026-10-18 的 cron(21:37 UTC)截至 23:34 UTC 未出 run(已 1h57m),仍在 2026-10-14 先例的约 3 小时 GitHub 延迟窗口内;交付面无缺口(release publishedAt 2026-10-17T23:24:37Z、7 资产齐;10-18 仅 docs 提交,产物与 10-17 构建无差异,48 小时更新口径不破);处置=只观察,不 dispatch(无修复待验证,重复构建同一 commit 无价值);若 10-19 cron(21:37 UTC)再缺才升级处理。
+- L5 维持阻塞:R2 复测 dist-tags 仍 latest=1.6.4、next=2.0.0-alpha.20,与 FIRE1019 复核一致。
+- 基线:vitepress build 绿(33.0s,含新增 zh 首页 script);docs-only 改动按口径不跑 ctest 与主构建。
 
 ## 台账依据(2026-10-19 FIRE1019 复核)
 
