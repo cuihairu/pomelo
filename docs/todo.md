@@ -41,9 +41,13 @@
 ## 台账依据(2026-10-19 R2 巡检)
 
 - 新修:zh 首页缺镜像语言记忆脚本——4106ac3 的 click listener 只在英文页注册,浏览器语言为 zh 的用户从中文页点 English 到达英文根页后,会被 navigator.language 自动检测立即 replace 回中文页,UI 层无法停留英文首页;修复=docs/zh/index.md 加对称脚本(19f6230),产物核对见已完成区。
-- nightly 观察:2026-10-18 的 cron(21:37 UTC)截至 23:34 UTC 未出 run(已 1h57m),仍在 2026-10-14 先例的约 3 小时 GitHub 延迟窗口内;交付面无缺口(release publishedAt 2026-10-17T23:24:37Z、7 资产齐;10-18 仅 docs 提交,产物与 10-17 构建无差异,48 小时更新口径不破);处置=只观察,不 dispatch(无修复待验证,重复构建同一 commit 无价值);若 10-19 cron(21:37 UTC)再缺才升级处理。
+- nightly 观察(已解):2026-10-18 的 cron(21:37 UTC)一度到 23:34 UTC 未出 run(1h57m),判定仍在 2026-10-14 先例的约 3 小时 GitHub 延迟窗口内,处置=只观察不 dispatch(无修复待验证,重复构建同一 commit 无价值);实际 run 于 2026-10-18T23:35:29Z 触发、success、2m31s(延迟 1h58m,仍在先例窗口内),release 刷新于 23:37:58Z、7 资产齐,交付面无缺口(10-18 仅 docs 提交,产物与 10-17 构建无差异,48 小时更新口径不破)。10-19 的 cron(21:37 UTC)照常,无需升级处理。
+- 残留清理:两内部台账页头部的 `> **中文** — …暂无译版。` 为 c4ea186 手写切换器方案残留——6bfce8e 只删 docs/index.md 一行,50c2ec7(locales 落地)只给 docs/todo.md 加 1 行 [x]、从未触碰 docs/审计-文档一致性.md,故两行漏网,且与根 todo.md 自记「手写切换器全删」矛盾;已在 docs 两内部页删除(27163b8),README.md:3 / README.zh.md:3 的门面成对切换行(A12 登记特性、不在站点内)保留。
+- 审计表行号时效:表内 A6 记 docs/todo.md:3、A9 记 docs/todo.md:5,系 2026-10-13 快照行号;10-16 加头部行与 [x] 行后已漂移,本轮删头部行后开放项在 :6。发现行的历史证据不做回改,此处留记以免误读。
 - L5 维持阻塞:R2 复测 dist-tags 仍 latest=1.6.4、next=2.0.0-alpha.20,与 FIRE1019 复核一致。
 - 基线:vitepress build 绿(33.0s,含新增 zh 首页 script);docs-only 改动按口径不跑 ctest 与主构建。
+- 抽样复点:kernel+boot 仍 33 文件 2034 行(find | wc -l / cat | wc -l),与 docs/guide/intro.md:27-28 及审计表抽样项一致,无漂移。
+- 远端:本轮三笔 docs push(19f6230、e00f848、27163b8)各只触发 docs.yml 且均 success,主 CI 按 paths-ignore 跳过。
 
 ## 台账依据(2026-10-19 FIRE1019 复核)
 
