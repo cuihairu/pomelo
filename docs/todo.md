@@ -49,6 +49,14 @@
 - 抽样复点:kernel+boot 仍 33 文件 2034 行(find | wc -l / cat | wc -l),与 docs/guide/intro.md:27-28 及审计表抽样项一致,无漂移。
 - 远端:本轮三笔 docs push(19f6230、e00f848、27163b8)各只触发 docs.yml 且均 success,主 CI 按 paths-ignore 跳过。
 
+## 台账依据(2026-10-19 FIRE1019R2 复核)
+
+- L5 仍阻塞:`npm view vitepress dist-tags` → `latest=1.6.4`、`next=2.0.0-alpha.20`,与上两轮一致;已尝试=三次独立复测 dist-tags、查全版本序列(止于 alpha.20,无 beta/rc/stable);解除条件未到,无本地可行动作。
+- 无漏登事项:全仓 grep TODO/FIXME/XXX/HACK(kernel、boot、apps、servers、docs、workflow、sh)零命中;仓库门面元数据(A5)无漂移(description 含 fs/tty/shell/net 与 VitePress、8 个 topics 齐)。
+- 审计表抽样全表复核(9 项):CMakeLists.txt:115-120、122-149、tools/nightly-run.sh:1-16/40-42/69、ci.yml paths-ignore、nightly.yml matrix[q35,pc]+cron 37 21 * * *、boot/main.c:21-42(`servers_start()` 六个 prog_add)均与现状一致;禁词零命中(唯一命中是审计表自述的 grep 模式,非正文使用)。
+- 三处抽样行号已改正(intro.md:13-28 → :11-20,原范围含 22-28 无关的单体/微内核比较表;intro.md:27-28 → :20,33/2034 主张所在行;README.zh.md:80 → :82,A12 补镜像行后下移),33 文件 2034 行含分项(kernel/ 28 文件 1835 行 + boot/ 5 文件 199 行)精确成立,zh 镜像 intro.md:26 同数。
+- 结论:除 L5 外部依赖外无可推进项,无代决事项。
+
 ## 台账依据(2026-10-19 FIRE1019 复核)
 
 - 唯一未完成项(L5,vitepress 2.x stable 触发)复核:`npm view vitepress dist-tags` → `latest=1.6.4`、`next=2.0.0-alpha.20`;全版本序列止于 alpha.20(发布于 2026-09-04,至今 6 周半无任何新版),2.x 仍无 stable;解锁条件未成立,维持阻塞,不重开,不越界。
