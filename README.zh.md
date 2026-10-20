@@ -41,8 +41,9 @@ qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img -nographic
 qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
 ```
 
-`-M pc` 不是可有可无:默认的 `q35` 机型把盘挂在 AHCI 后面,这块 ATA 驱动够不着,
-fs 服务会打印一行提示,之后对每个请求都回一句 `fs: no disk`,shell 照常能用。[nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+`-M pc` 是特意写明的:qemu-system-i386 本来就默认 `pc` 机型,主 IDE 盘这块 ATA 驱动够得着;
+换成 `-M q35` 盘就挂到 AHCI 后面够不着了,fs 服务会打印一行提示,之后对每个请求都回一句
+`fs: no disk`,shell 照常能用。[nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 每天把两种机型各真跑一遍,串口记录和启动截图都挂在 [nightly release](https://github.com/cuihairu/pomelo/releases/tag/nightly) 里。
 
 ## 目录

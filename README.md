@@ -55,8 +55,9 @@ qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img -nographic
 qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
 ```
 
-`-M pc` is not decoration: the default `q35` machine wires its disk through
-AHCI, out of reach of this ATA driver — the fs server prints a note and
+`-M pc` is spelled out on purpose: `qemu-system-i386` already boots its default
+`pc` machine, whose primary IDE disk this ATA driver reaches — swap in `-M q35`
+and the disk moves behind AHCI, out of reach. The fs server prints a note and
 answers every request with `fs: no disk`, so the shell stays usable. The
 [nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 boots both machines every day and ships the serial log and a boot
