@@ -9,6 +9,7 @@
 
 ## 已完成
 
+- [x] README 两语种修「默认机型是 q35」误写:本地 `qemu-system-i386 -machine help` 默认 pc-i440fx 系、教材 docs/guide/build-and-run.md:31 亦写「default is `pc`」,改为「默认即 pc,特意写明;-M q35 才把盘挪到 AHCI 后」(42f52c2,登审计表 A13,docs build 绿)
 - [x] zh 首页补镜像语言记忆脚本,修复中文用户点 English 被自动检测弹回的死循环(19f6230,vitepress build 绿,产物逐条核对:picked 双向优先、非 zh 浏览器入 zh 首页回英文根、listener 双向记录)
 - [x] vitepress 官方 locales 双语落地(英文 17 页在 docs/ 根、中文 17 页在 docs/zh/,官方语言切换器替代手写切换链接,构建绿;见根 todo.md 2026-10-17 用户令)
 - [x] clear 与 reboot 各有专属冒烟测试,审计表口径改六测(0c135b0,ctest 6/6)
