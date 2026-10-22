@@ -32,7 +32,7 @@ jobs:
       matrix:
         machine: [q35, pc]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: install qemu and iso tools
         run: |
@@ -58,7 +58,7 @@ jobs:
               ${{ inputs.qemu_extra }}
 
       - name: upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: nightly-${{ matrix.machine }}
           path: |
@@ -74,10 +74,10 @@ jobs:
     if: success()
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7.0.1
 
       - name: download the evidence from both machines
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8.0.2
         with:
           pattern: nightly-*
           path: artifacts
