@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   nightly:
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     strategy:
       matrix:
         machine: [q35, pc]
@@ -72,7 +72,7 @@ jobs:
   release:
     needs: nightly
     if: success()
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7.0.1
 
