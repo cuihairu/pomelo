@@ -25,6 +25,7 @@ pcap=$(dirname "$out")/net.pcap
 fifo=$(dirname "$out")/walk.in
 trap '' PIPE                          # a dead qemu must not kill the driver
 
+: > "$out"                            # the transcript exists before qemu starts
 rm -f "$fifo"
 mkfifo "$fifo"
 timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
@@ -34,18 +35,28 @@ timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
     < "$fifo" > "$out" 2>&1 &
 qpid=$!
 
-exec 3>"$fifo"                        # hold the write end: no mid-run EOF
+# O_RDWR open never waits on a reader: a qemu that dies before opening the
+# read end must not hang the driver.  The write end is still held, so the
+# fifo sees no mid-run EOF.
+exec 3<>"$fifo"
 
+# One deadline for the whole battery, matching the qemu timeout: if the
+# shell never speaks (or qemu dies), give up at ~25s instead of spinning
+# per command.  A prompt count that greps an unreadable/absent transcript
+# reads as 0 -- never a fail-open that writes before the shell is up.
 want=0
+deadline=$(( $(date +%s) + 25 ))
 send() {
     want=$((want + 1))
-    i=0
-    while [ "$(grep -c 'pomelo> ' "$out" 2>/dev/null)" -lt "$want" ] \
-        && [ "$i" -lt 88 ]; do        # give up only near the timeout
-        sleep 0.25; i=$((i + 1))
+    count=0
+    while [ "$(date +%s)" -lt "$deadline" ]; do
+        count=$(grep -c 'pomelo> ' "$out" 2>/dev/null) || count=0
+        [ "$count" -ge "$want" ] && break
+        sleep 0.25
     done
-    printf '%s\n' "$1" >&3 || return 0
-    sleep 1                           # one command per tick, as before
+    [ "$count" -ge "$want" ] || return 0   # shell never spoke in time: skip
+    printf '%s\n' "$1" >&3
+    sleep 1                               # one command per tick, as before
 }
 
 send 'help'
