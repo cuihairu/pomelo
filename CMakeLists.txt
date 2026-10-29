@@ -145,5 +145,9 @@ add_test(NAME smoke-reboot
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke-reboot.sh
             ${QEMU} ${KERNEL_ELF} ${IMG} smoke-reboot.log)
+add_test(NAME walkthrough
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMAND sh ${CMAKE_SOURCE_DIR}/tools/walkthrough.sh
+            ${QEMU} ${KERNEL_ELF} ${IMG} walkthrough.log)
 set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net smoke-clear
-    smoke-reboot PROPERTIES TIMEOUT 120)
+    smoke-reboot walkthrough PROPERTIES TIMEOUT 120)
