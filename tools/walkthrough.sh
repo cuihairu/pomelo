@@ -9,10 +9,11 @@
 # trip that hung the shell before sys_send_wait -- and it is the same script
 # tools/nightly-run.sh runs as its first boot.
 #
-# Input is paced, not burst: the tty task processes characters one interrupt
-# at a time, and a burst would overflow its line buffer before the shell
-# could ask for a line. The first byte after boot is swallowed by the UART
-# handshake, so a newline primes the port.
+# Input is prompt-gated, not timed: the driver watches the transcript and
+# types the next line only once the shell's `pomelo> ` has appeared, then
+# gives the tty a second per command. Fixed early timing lost the opening
+# commands on a slow boot -- the help keystroke died before the UART was
+# configured and the nightly graded a shell that never saw a command.
 #
 # The machine is not named here: without extra args QEMU picks `pc` (legacy
 # IDE, full disk battery). Pass `-M q35` for the AHCI machine -- the fs
@@ -21,27 +22,47 @@
 
 qemu="$1"; kernel="$2"; img="$3"; out="$4"; shift 4
 pcap=$(dirname "$out")/net.pcap
+fifo=$(dirname "$out")/walk.in
+trap '' PIPE                          # a dead qemu must not kill the driver
 
-pacing() {
-    sleep 2; printf '\n'
-    sleep 1; printf 'help\n'
-    sleep 1; printf 'ps\n'
-    sleep 1; printf 'spawn probe\n'
-    sleep 1; printf 'ls\n'
-    sleep 1; printf 'cat hello.txt\n'
-    sleep 1; printf 'uptime\n'
-    sleep 1; printf 'echo hello pomelo\n'
-    sleep 1; printf 'write walk.txt hello walkthrough\n'
-    sleep 1; printf 'ls\n'
-    sleep 1; printf 'cat walk.txt\n'
-    sleep 1; printf 'mem\n'
-    sleep 2
-}
-
-{ pacing; } | timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
+rm -f "$fifo"
+mkfifo "$fifo"
+timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
     -nographic -no-reboot "$@" \
     -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0 \
-    -object filter-dump,id=f0,netdev=n0,file="$pcap" > "$out" 2>&1
+    -object filter-dump,id=f0,netdev=n0,file="$pcap" \
+    < "$fifo" > "$out" 2>&1 &
+qpid=$!
+
+exec 3>"$fifo"                        # hold the write end: no mid-run EOF
+
+want=0
+send() {
+    want=$((want + 1))
+    i=0
+    while [ "$(grep -c 'pomelo> ' "$out" 2>/dev/null)" -lt "$want" ] \
+        && [ "$i" -lt 88 ]; do        # give up only near the timeout
+        sleep 0.25; i=$((i + 1))
+    done
+    printf '%s\n' "$1" >&3 || return 0
+    sleep 1                           # one command per tick, as before
+}
+
+send 'help'
+send 'ps'
+send 'spawn probe'
+send 'ls'
+send 'cat hello.txt'
+send 'uptime'
+send 'echo hello pomelo'
+send 'write walk.txt hello walkthrough'
+send 'ls'
+send 'cat walk.txt'
+send 'mem'
+
+exec 3>&-
+wait "$qpid" 2>/dev/null
+rm -f "$fifo"
 
 fail=0
 check() { grep -Eq "$2" "$out" || { echo "FAIL: $1"; fail=1; }; }
