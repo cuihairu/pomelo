@@ -1,2 +1,6 @@
 - [x] 文档接 vitepress 官方 locales 双语（2026-10-17 用户令）：现状 locales=0、仅 1 个英文页（index.en.md）、0 个中文页、config 只有 lang:'zh-CN'。要求：locales.root=en + locales.zh（link:'/zh/'），各自独立 nav/sidebar；英文在 docs/ 根、中文在 docs/zh/；中文必须真中文禁机翻禁复制英文顶替；构建通过贴输出；**禁止自造切换链接**（上一版 `> **中文** | [English](index.en.md)` 已删，commit 6bfce8e）；完成后勾掉并 commit+push，回报 hash 与中英文页数
   - 状态:已完成(2026-10-18)。locales.root=en + locales.zh(link:'/zh/') 各自独立 nav/sidebar;英文 17 页在 docs/ 根、中文 17 页在 docs/zh/(首页+16 章);手写切换器全删、语言切换走官方下拉;`pnpm run build` 绿。
+
+- [ ] vitepress 2.x 出 stable 后去掉 pnpm overrides 原生升级,重验 build 与教材产物（BLOCKED：缺上游 vitepress 2.x stable 发布；npm dist-tags latest=1.6.4、next=2.0.0-alpha.21，2026-10-31 复核）
+  - 状态:阻塞。原因:上游 vitepress 2.x 仍只有 alpha(latest=1.6.4、next=2.0.0-alpha.21,alpha.21 发布于 2026-10-25,距 alpha.20 约 7 周);依赖链内无范围内已修补版本(vite 已修补 6.4.3+ 在 vitepress 1.6.4 的 ^5.4.14 之外,esbuild 0.25.x 同理)。触发条件:npm dist-tags 的 latest 升到 2.x stable。所需输入:上游发布;届时动作=升 ^2.x、去 overrides、pnpm install、build 绿、16 章产物无回归、单 commit。(2026-10-28 复核:`npm view vitepress dist-tags`=latest=1.6.4、next=2.0.0-alpha.21,全版本序列止于 alpha.21(2026-10-25T13:00:10Z 发布,距 alpha.20 约 7 周),2.x 仍无 stable,保持未勾)
+  - 仓内预备:tools/docs-chapters.sh save/check 承接「16 章产物无回归」验收——升级前 save 建基线、升级后 check 逐一比对 34 个站点页(17 页×中英,归一化 asset hash 后只认正文漂移),四路径已验(save 34 页、零漂移 exit 0、注入漂移 exit 1、无基线 exit 2)。

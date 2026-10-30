@@ -2,7 +2,7 @@
 # docs-chapters.sh -- snapshot the built documentation site pages, then diff a
 # rebuild against the snapshot.
 #
-# The vitepress 2.x upgrade (docs/todo.md L5) has to land with "the 16
+# The vitepress 2.x upgrade (todo.md) has to land with "the 16
 # chapters show no regression". Eyeballing 34 built pages is not a gate, so
 # this script stores the pages built with the currently pinned dependencies
 # and checks a later build against them. Asset filenames carry content hashes
