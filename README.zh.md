@@ -1,5 +1,7 @@
 # Pomelo
 
+<p align="center"><a href="https://cuihairu.github.io/pomelo/zh/"><img src="https://img.shields.io/badge/%E6%96%87%E6%A1%A3-blue" alt="文档"></a> <a href="https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml"><img src="https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg" alt="nightly"></a></p>
+
 > [English](README.md) | **中文**
 
 > 用 C 写的 i386 微内核——小到一次读完,足够自学内核知识。
@@ -9,17 +11,22 @@ Pomelo 是一个 i386 平台的简易内核,用来自学内核知识,一个**逻
 shell、网络——都是跑在消息传递之上的独立任务,而且每一个都住在自己 ring 3 的
 地址空间里。它用 QEMU 直接启动,不需要安装引导器。
 
-[![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
-
-[English](README.md)
-
-<p align="center"><a href="https://cuihairu.github.io/pomelo/zh//"><img src="https://img.shields.io/badge/%E6%96%87%E6%A1%A3-blue" alt="docs"></a></p>
 ## 快速开始
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # 在 QEMU 中启动:串口 shell、PS/2 键盘、鼠标、网络、擦屏与重启各测一遍
+ctest --test-dir build          # 在 QEMU 中启动:串口 shell、PS/2 键盘、鼠标、网络、擦屏与重启、walkthrough 各测一遍
 ```
+
+## 本地测试口径
+
+CI 与本地开发按改动面三路分流——改一行文档不该全量编译。
+
+1. **文档改动**（`*.md`、`docs/**`、图片）：不编译。主 CI workflow 的
+   `paths-ignore` 已跳过这些路径。
+2. **代码改动**：只跑改动子集，不全量——`ctest -R '<改动测试>'`。
+3. **全量**（`ctest --output-on-failure`）：仅 CMakeLists.txt、`.github/**`、
+   Docker/Compose 配置改动或发布前触发。
 
 ## 本地跑起来
 
@@ -42,8 +49,9 @@ qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img -nographic
 qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
 ```
 
-`-M pc` 不是可有可无:默认的 `q35` 机型把盘挂在 AHCI 后面,这块 ATA 驱动够不着,
-fs 服务会打印一行提示,之后对每个请求都回一句 `fs: no disk`,shell 照常能用。[nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
+`-M pc` 是特意写明的:qemu-system-i386 本来就默认 `pc` 机型,主 IDE 盘这块 ATA 驱动
+够得着;换成 `-M q35` 盘就挂到 AHCI 后面够不着了,fs 服务会打印一行提示,之后对每个
+请求都回一句 `fs: no disk`,shell 照常能用。[nightly workflow](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 每天把两种机型各真跑一遍,串口记录和启动截图都挂在 [nightly release](https://github.com/cuihairu/pomelo/releases/tag/nightly) 里。
 
 ## 目录

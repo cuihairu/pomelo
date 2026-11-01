@@ -1,6 +1,6 @@
 # Pomelo
 
-<p align="center"><a href="https://cuihairu.github.io/pomelo//"><img src="https://img.shields.io/badge/docs-blue" alt="docs"></a></p>
+<p align="center"><a href="https://cuihairu.github.io/pomelo/"><img src="https://img.shields.io/badge/docs-blue" alt="docs"></a> <a href="https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml"><img src="https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg" alt="nightly"></a></p>
 
 > **English** | [中文](README.zh.md)
 
@@ -13,27 +13,25 @@ network — runs as separate tasks on top of message passing, and every one of
 them lives in its own ring 3 address space. It boots straight from QEMU with no
 bootloader to install.
 
-[![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
-
-[中文说明](README.zh.md)
 ## Quick start
 
 ```sh
 cmake -B build && cmake --build build
-ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyboard, the mouse, the network, the screen wipe and the reboot
+ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyboard, the mouse, the network, the screen wipe, the reboot and the walkthrough
 ```
 
 
-## 本地测试口径
+## Test scope by change type
 
-CI 与本地开发按改动面三路分流——改一行文档不该全量编译。
+CI and local development split three ways by what changed — a one-line docs
+edit should not trigger a full build.
 
-1. **文档改动**（`*.md`、`docs/**`、图片）：不编译。主 CI workflow 的
-   `paths-ignore` 已跳过这些路径。
-2. **代码改动**：只跑改动子集，不全量。
-   - `ctest -R '<改动测试>'`
-3. **全量**（`ctest --output-on-failure`）：仅以下情形触发——CMakeLists.txt、
-   `.github/**`、Docker/Compose 配置、发布前。
+1. **Docs-only changes** (`*.md`, `docs/**`, images): no build. The main CI
+   workflow's `paths-ignore` already skips these paths.
+2. **Code changes**: run only the affected tests, not the full suite —
+   `ctest -R '<the test you touched>'`
+3. **Full suite** (`ctest --output-on-failure`): only when CMakeLists.txt,
+   `.github/**` or Docker/Compose config changed, or before a release.
 
 ## Run it locally
 
