@@ -1,5 +1,7 @@
 # Pomelo
 
+<p align="center"><a href="https://cuihairu.github.io/pomelo/"><img src="https://img.shields.io/badge/docs-docs-blue" alt="docs"></a></p>
+
 > **English** | [中文](README.zh.md)
 
 > A microkernel written in C — small enough to read in one sitting, built for learning how kernels work.
@@ -14,7 +16,6 @@ bootloader to install.
 [![nightly](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml/badge.svg)](https://github.com/cuihairu/pomelo/actions/workflows/nightly.yml)
 
 [中文说明](README.zh.md)
-
 ## Quick start
 
 ```sh

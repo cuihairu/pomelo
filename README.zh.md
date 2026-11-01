@@ -13,6 +13,7 @@ shell、网络——都是跑在消息传递之上的独立任务,而且每一�
 
 [English](README.md)
 
+<p align="center"><a href="https://cuihairu.github.io/pomelo/zh/"><img src="https://img.shields.io/badge/docs-文档-blue" alt="docs"></a></p>
 ## 快速开始
 
 ```sh
