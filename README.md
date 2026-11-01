@@ -23,15 +23,14 @@ ctest --test-dir build          # boots in QEMU: the serial shell, the PS/2 keyb
 
 ## Test scope by change type
 
-CI and local development split three ways by what changed — a one-line docs
-edit should not trigger a full build.
+What you run depends on what changed — a one-line docs edit should not
+trigger a build at all. The main CI workflow's `paths-ignore` already skips
+docs-only pushes; any code change makes CI run the full suite.
 
 1. **Docs-only changes** (`*.md`, `docs/**`, images): no build. The main CI
    workflow's `paths-ignore` already skips these paths.
-2. **Code changes**: run only the affected tests, not the full suite —
-   `ctest -R '<the test you touched>'`
-3. **Full suite** (`ctest --output-on-failure`): only when CMakeLists.txt,
-   `.github/**` or Docker/Compose config changed, or before a release.
+2. **Code changes**: CI runs the full suite. For a fast local loop, run only
+   the tests you touched — `ctest -R '<the test you touched>'`.
 
 ## Run it locally
 

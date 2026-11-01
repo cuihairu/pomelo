@@ -20,13 +20,13 @@ ctest --test-dir build          # 在 QEMU 中启动:串口 shell、PS/2 键盘�
 
 ## 本地测试口径
 
-CI 与本地开发按改动面三路分流——改一行文档不该全量编译。
+跑什么取决于改了什么——改一行文档不该触发编译。主 CI workflow 的
+`paths-ignore` 已跳过纯文档 push;任何代码改动都让 CI 跑全量。
 
 1. **文档改动**（`*.md`、`docs/**`、图片）：不编译。主 CI workflow 的
    `paths-ignore` 已跳过这些路径。
-2. **代码改动**：只跑改动子集，不全量——`ctest -R '<改动测试>'`。
-3. **全量**（`ctest --output-on-failure`）：仅 CMakeLists.txt、`.github/**`、
-   Docker/Compose 配置改动或发布前触发。
+2. **代码改动**：CI 跑全量。想本地快循环,只跑你碰过的测试——
+   `ctest -R '<改动测试>'`。
 
 ## 本地跑起来
 
