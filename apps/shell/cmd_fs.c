@@ -65,7 +65,9 @@ void cmd_write(int argc, char **argv) {
     }
     for (int off = 0; off < total; ) {
         int n = total - off > MSG_DATA ? MSG_DATA : total - off;
-        off += fs_write(ino, off, content + off, n);
+        int w = fs_write(ino, off, content + off, n);
+        if (w <= 0) break;      /* disk full or refused: stop, don't loop */
+        off += w;
     }
     fs_commit(ino, total);
 
