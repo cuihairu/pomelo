@@ -994,8 +994,10 @@ static void sock_api(struct msg *m) {
 static void net_rx(const u8 *f, int len) {
     if (len < 14) return;
     u16 et = (u16)((f[12] << 8) | f[13]);
-    if (et == ETH_ARP)
+    if (et == ETH_ARP) {
+        if (len < ETH_HDR + 28) return;      /* runt: arp_in reads 28 */
         arp_in(f + 14);
+    }
     else if (et == ETH_IP)
         ip_in(f + 14, len - 14);
 }
