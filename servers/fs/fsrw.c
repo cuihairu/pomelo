@@ -80,6 +80,7 @@ void do_write(struct msg *m) {
     int tail = (int)(SECTOR - off % SECTOR);
     if (len > MSG_DATA) len = MSG_DATA;
     if (len > tail) len = tail;
+    if (len == 0) { reply(m, 0, 0, 0, 0, 0); return; }  /* no block to claim */
 
     if (ino->direct[off / SECTOR] == 0) {       /* claim a block lazily */
         int b = alloc_block();
