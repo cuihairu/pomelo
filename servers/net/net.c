@@ -670,10 +670,9 @@ static void tcp_send(struct sock *s, u8 flags, const u8 *payload, int len) {
 }
 
 static void sock_send_seg(struct sock *s) {
-    u32 save = s->snd_nxt;               /* data flies from snd_una */
-    s->snd_nxt = s->snd_una;
+    s->snd_nxt = s->snd_una;             /* data flies from snd_una */
     tcp_send(s, TCP_ACK | TCP_PSH, s->unacked, s->unacked_len);
-    s->snd_nxt = save + s->unacked_len;
+    s->snd_nxt = s->snd_una + s->unacked_len;
 }
 
 static void sock_feed_udp(struct sock *s, const u8 *d, int n) {
