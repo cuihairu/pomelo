@@ -63,17 +63,18 @@ void cmd_write(int argc, char **argv) {
         tty_puts("no space left\n");
         return;
     }
-    for (int off = 0; off < total; ) {
+    int off = 0;
+    for (; off < total; ) {
         int n = total - off > MSG_DATA ? MSG_DATA : total - off;
         int w = fs_write(ino, off, content + off, n);
         if (w <= 0) break;      /* disk full or refused: stop, don't loop */
         off += w;
     }
-    fs_commit(ino, total);
+    fs_commit(ino, off);        /* publish only the bytes actually written */
 
     char num[12];
     tty_puts("wrote ");
-    num_str(total, num);
+    num_str(off, num);
     tty_puts(num);
     tty_puts(" bytes to ");
     tty_puts(argv[1]);

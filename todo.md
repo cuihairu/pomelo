@@ -4,7 +4,7 @@
 
 - [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）
 - [ ] IPC 边界防御：fs/net 服务解 m->arg1/arg2 长度与 m->arg0 inode 索引前先校验负值/上限（发现 4-5，docs/review/2026-11-01-code-review.md）
-- [ ] net 校验 ARP 帧长 ≥42、con_write 负长显式拒绝（发现 6-7）
+- [ ] net 校验 ARP 帧长 ≥42（发现 6）
 - [ ] fs do_commit 校验 size ≤ MAXFILE（发现 8）
 - [ ] 清理小项：tty_getline 负参、ICMP 奇长校验和残留、walkthrough grep 过宽、mkfs next_block 守卫（发现 9-12）
 
@@ -32,3 +32,9 @@
 - [x] cmd_write 写盘失败护栏 — dd2cac9, ctest 7/7
 - [x] TCP 重传 snd_nxt 固定 una+len — dd8105e, ctest 7/7
 - [x] 全仓代码深审报告 — docs/review/2026-11-01-code-review.md, 2026-11-02
+
+## 审核发现
+
+- [x] 审核发现：cmd_write 在 fs_write 失败 break 后仍执行 fs_commit(ino,total) 并以 total 打印成功，部分写入被伪报为完整文件（apps/shell/cmd_fs.c:69-72）— 已修 apps/shell/cmd_fs.c，fs_commit 发布实际写入字节 off，打印 off；ctest 7/7
+- [x] 审核发现：code-review 报告「约 341 个满文件即满」算术错误——1024 数据块 / 每满文件 6 块 ≈171，且 NINODES=32 上限（docs/review/2026-11-01-code-review.md:28）— 属实，见下修改 docs/review/2026-11-01-code-review.md:28 改为「约 171 个，且 NINODES=32 在文件数上更先封顶」
+- [x] 审核发现：finding 7 状态不一致——报告与台账将 con_write 负长列为待办，但本次 4391cb5 的 SYS_WRITE user_ok 以无符号 ecx 已拒绝负长，报告自述修法已落地（docs/review/2026-11-01-code-review.md:60-62；todo.md:7）— 属实，见下

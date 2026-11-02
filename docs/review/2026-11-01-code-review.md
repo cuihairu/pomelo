@@ -25,7 +25,7 @@
 
 **2. `cmd_write` 写盘失败死循环 / 越界读 —— shell 写盘可永久挂死**
 - 证据:`apps/shell/cmd_fs.c:66-68`(修复前)`for (int off = 0; off < total; ) { int n = ...; off += fs_write(ino, off, content + off, n); }`(修复后 :66-70 带 `if (w <= 0) break;`)。
-- 触发一(死循环):盘满时 `servers/fs/fsrw.c:74` `if (b < 0) { reply(m, 0, 0, 0, 0, 0); return; }` 回 `len=0`,`fs_write`(`apps/shell/fsio.c:67`)返回 0 → `off += 0` 永不前进 → shell 死循环。写满盘是可达的:镜像 `NDATA=1024` 数据块,`MAXFILE=3072`,约 341 个满文件即满。
+- 触发一(死循环):盘满时 `servers/fs/fsrw.c:74` `if (b < 0) { reply(m, 0, 0, 0, 0, 0); return; }` 回 `len=0`,`fs_write`(`apps/shell/fsio.c:67`)返回 0 → `off += 0` 永不前进 → shell 死循环。写满盘是可达的:镜像 `NDATA=1024` 数据块,`MAXFILE=3072`(6 块/满文件),约 `1024/6≈171` 个满文件即满;且 `NINODES=32` 使文件数在块数之前先封顶。
 - 触发二(越界读):`fs_write` 返回 `FS_REFUSED(-2)`(`apps/shell/shell.h:38`)→ `off += -2` 变负 → `content + off` 读到缓冲区以下(用户态,脏读)。
 - 处置:**已修**。镜像 `cmd_cat:39` 的既有护栏 `if (n <= 0) break;`:`int w = fs_write(...); if (w <= 0) break; off += w;`。
 
@@ -59,7 +59,7 @@
 
 **7. `con_write` 负长度**
 - 证据:`kernel/char.c:28` `con_write(const char *s, int n) { for (int i = 0; i < n; i++) con_putc(s[i]); }` —— `n < 0` 时循环不执行,无害;但配合发现 1 修复后,负 `n` 应显式拒绝。
-- 处置:**记 todo**;修法:在 syscall 门把 `ecx` 当有符号校验,或 `if (n < 0) return;`。
+- 处置:**已修**(发现 1 一并落地)。`syscall.c:62` SYS_WRITE 过 `user_ok` 门:`user_ok(p, len)` 以 `u32` 取 `len`(`ecx` 无符号),负 `n` 转无符号后 `a+len` 环绕/超 `USER_STACK_TOP`,`user_ok` 返回 0 → `r->eax=-1`,不进入 `con_write`。
 
 **8. `do_commit` 尺寸信任 —— 提交的 size 可与已写字节不符**
 - 证据:`servers/fs/fsrw.c:83-87` `inodes[m->arg0].size = m->arg1;` 直接采用客户端声明的 size,不校验与已写块一致;配合 `do_read:35` `off >= ino->size` 读边界,一个说谎的客户端可让 `do_read` 在 `off < size` 时读 `direct[off/512]`(块号可能为 0 → `ata_read(0, secbuf)` 读物理块 0,超级块区)。
