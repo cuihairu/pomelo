@@ -629,6 +629,7 @@ static void sock_park(struct sock *s, const struct msg *req, int kind, int cap) 
  * it delivers the smaller of what is there and what was asked, and the
  * rest stays for the next call. */
 static void sock_consume(struct sock *s, int cap) {
+    if (cap < 0) cap = 0;                /* IPC length: never a wrap */
     int n = s->rbuf_len;
     if (n > cap) n = cap;
     if (n > MSG_DATA) n = MSG_DATA;
@@ -943,9 +944,11 @@ static void sock_api(struct msg *m) {
             return;
         }
         if (s->proto == IP_PROTO_UDP) {  /* fire and forget */
+            int len = m->arg1 < 0 ? 0 : m->arg1;
+            if (len > MSG_DATA) len = MSG_DATA;
             udp_tx(s->rip, s->rport, s->lport, (const u8 *)m->data,
-                   m->arg1 > MSG_DATA ? MSG_DATA : m->arg1);
-            reply_send(m, s, m->arg1);
+                   len);
+            reply_send(m, s, len);
             return;
         }
         if (s->state != TS_ESTABLISHED) {
@@ -956,7 +959,8 @@ static void sock_api(struct msg *m) {
             refuse(m, "send: the last segment is still out");
             return;
         }
-        s->unacked_len = m->arg1 > SOCKBUF ? SOCKBUF : m->arg1;
+        s->unacked_len = m->arg1 < 0 ? 0 : m->arg1;
+        if (s->unacked_len > SOCKBUF) s->unacked_len = SOCKBUF;
         memcpy(s->unacked, m->data, s->unacked_len);
         s->retx_ticks = s->retx_count = 0;
         sock_send_seg(s);

@@ -29,8 +29,18 @@ static void save_table(void) {
         ata_write(INODE_START + s, (u8 *)inodes + s * SECTOR);
 }
 
+/* The inode index crosses the IPC trust boundary: a malicious or broken
+ * client may hand us any value. An index outside the table, or an unused
+ * slot, is a refusal, not an out-of-bounds dereference. */
+static struct inode *ino_at(struct msg *m) {
+    if ((u32)m->arg0 >= NINODES || !inodes[m->arg0].used)
+        return 0;
+    return &inodes[m->arg0];
+}
+
 void do_read(struct msg *m) {
-    struct inode *ino = &inodes[m->arg0];
+    struct inode *ino = ino_at(m);
+    if (!ino) { refuse(m, "bad inode"); return; }
     u32 off = m->arg1;
     if (off >= ino->size) { reply(m, 0, 0, 0, 0, 0); return; }
     int len = ino->size - off;
@@ -61,13 +71,15 @@ void do_create(struct msg *m) {
 }
 
 void do_write(struct msg *m) {
-    struct inode *ino = &inodes[m->arg0];
+    struct inode *ino = ino_at(m);
+    if (!ino) { refuse(m, "bad inode"); return; }
     u32 off = m->arg1;
     int len = m->arg2;
+    if (len < 0) len = 0;                        /* never memcpy a wrap */
+    if (off / SECTOR >= (u32)NDIRECT) { reply(m, 0, 0, 0, 0, 0); return; }
     int tail = (int)(SECTOR - off % SECTOR);
     if (len > MSG_DATA) len = MSG_DATA;
     if (len > tail) len = tail;
-    if (off / SECTOR >= (u32)NDIRECT) { reply(m, 0, 0, 0, 0, 0); return; }
 
     if (ino->direct[off / SECTOR] == 0) {       /* claim a block lazily */
         int b = alloc_block();
@@ -81,7 +93,10 @@ void do_write(struct msg *m) {
 }
 
 void do_commit(struct msg *m) {               /* phase 2: publish size */
-    inodes[m->arg0].size = m->arg1;
+    struct inode *ino = ino_at(m);
+    if (!ino) { refuse(m, "bad inode"); return; }
+    if ((u32)m->arg1 > MAXFILE) { refuse(m, "bad size"); return; }
+    ino->size = m->arg1;
     save_table();
     reply(m, 0, 0, 0, 0, 0);
 }
