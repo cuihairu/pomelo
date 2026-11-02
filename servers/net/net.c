@@ -36,6 +36,16 @@ static u32 rx_buf_pa[RX_DESCS];
 static const u8 ip_self[4] = { 10, 0, 2, 15 };
 static const u8 ip_gw[4]   = { 10, 0, 2, 2 };
 
+/* A SEND length crosses the IPC trust boundary. m->data holds only
+ * MSG_DATA bytes, so a TCP segment (like the UDP branch below) is
+ * bounded by what one message can carry -- clamping to SOCKBUF would
+ * let memcpy read past the end of the message on the stack. */
+static int net_clamp_send_len(int len) {
+    if (len < 0) return 0;
+    if (len > MSG_DATA) return MSG_DATA;
+    return len;
+}
+
 static u8 arp_mac[6];
 static int arp_ready;
 
@@ -293,8 +303,8 @@ static void arp_in(const u8 *a) {
         f[20] = 0; f[21] = 2;             /* operation: reply */
         memcpy(f + 22, mac, 6);
         memcpy(f + 28, ip_self, 4);
-        memcpy(f + 34, a + 8, 6);         /* the asker becomes the target */
-        memcpy(f + 40, a + 14, 4);
+        memcpy(f + 32, a + 8, 6);         /* the asker becomes the target */
+        memcpy(f + 38, a + 14, 4);
         net_tx(f, sizeof f);
     }
 }
@@ -370,10 +380,12 @@ static void ip_in(const u8 *ip, int len) {
     if (ip[9] == IP_PROTO_ICMP)
         icmp_in(ip + ihl, total - ihl, ip + 12);
     else if (ip[9] == IP_PROTO_UDP) {
+        if (total - ihl < 4) return;           /* no room for the port pair */
         struct sock *s = sock_by_port(IP_PROTO_UDP,
                                       (u16)((ip[ihl + 2] << 8) | ip[ihl + 3]));
         if (s) sock_in_udp(s, ip + ihl, total - ihl, ip + 12);
     } else if (ip[9] == IP_PROTO_TCP) {
+        if (total - ihl < 4) return;           /* no room for the port pair */
         struct sock *s = sock_by_port(IP_PROTO_TCP,
                                       (u16)((ip[ihl + 2] << 8) | ip[ihl + 3]));
         if (s) sock_in_tcp(s, ip + ihl, total - ihl, ip + 12);
@@ -964,8 +976,7 @@ static void sock_api(struct msg *m) {
             refuse(m, "send: the last segment is still out");
             return;
         }
-        s->unacked_len = m->arg1 < 0 ? 0 : m->arg1;
-        if (s->unacked_len > SOCKBUF) s->unacked_len = SOCKBUF;
+        s->unacked_len = net_clamp_send_len(m->arg1);
         memcpy(s->unacked, m->data, s->unacked_len);
         s->retx_ticks = s->retx_count = 0;
         sock_send_seg(s);
