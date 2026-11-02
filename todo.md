@@ -2,7 +2,7 @@
 
 ## 待办
 
-- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）
+- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-03 复查仍 latest=1.6.4）
 - [x] IPC 边界防御：fs/net 服务解 m->arg1/arg2 长度与 m->arg0 inode 索引前先校验负值/上限（发现 4-5，docs/review/2026-11-01-code-review.md）— servers/fs/fsrw.c 加 ino_at 校验索引/未用槽、do_write 负 len 归零、do_commit size≤MAXFILE；servers/net/net.c sock_consume/UDP/SEND 负 len 归零、夹上限；ctest 7/7
 - [x] net 校验 ARP 帧长 ≥42（发现 6）— servers/net/net.c net_rx 加 len<ETH_HDR+28 拦截；ctest 7/7
 - [x] fs do_commit 校验 size ≤ MAXFILE（发现 8）— b618ce7 IPC 提交 do_commit 已加 size≤MAXFILE 拒绝；ctest 7/7
@@ -38,3 +38,9 @@
 - [x] 审核发现：cmd_write 在 fs_write 失败 break 后仍执行 fs_commit(ino,total) 并以 total 打印成功，部分写入被伪报为完整文件（apps/shell/cmd_fs.c:69-72）— 已修 apps/shell/cmd_fs.c，fs_commit 发布实际写入字节 off，打印 off；ctest 7/7
 - [x] 审核发现：code-review 报告「约 341 个满文件即满」算术错误——1024 数据块 / 每满文件 6 块 ≈171，且 NINODES=32 上限（docs/review/2026-11-01-code-review.md:28）— 属实，见下修改 docs/review/2026-11-01-code-review.md:28 改为「约 171 个，且 NINODES=32 在文件数上更先封顶」
 - [x] 审核发现：finding 7 状态不一致——报告与台账将 con_write 负长列为待办，但本次 4391cb5 的 SYS_WRITE user_ok 以无符号 ecx 已拒绝负长，报告自述修法已落地（docs/review/2026-11-01-code-review.md:60-62；todo.md:7）— 属实，见下
+- [x] 审核发现：net TCP SEND 越界读 m->data 未闭合——新护栏把 unacked_len 夹到 SOCKBUF=512，但 m->data 仅 MSG_DATA=56 字节（struct msg 末字段，net_main 栈上局部量），恶意客户端 arg1∈(57,512] 时 memcpy 从 m->data 越界读 ≤456 字节并以 TCP 载荷发出；应夹到 MSG_DATA（同函数 UDP 分支 952-953 已如此），而非 SOCKBUF（servers/net/net.c:967-969）— 已修 ea2807c（net_clamp_send_len 夹到 MSG_DATA），ctest 7/7
+- [x] 审核发现：mkfs next_block 守卫不足——`next_block>=NDATA` 仅在文件边界检查，单个文件（≤MAXFILE=3072=6 块）可在块循环内把 next_block 推过 NDATA，put_sector(DATA_START+next_block) 越过 disk[] 上界写（disk 仅容 lba≤DATA_START+NDATA-1=1028）；守卫应置于块循环内 put_sector 之前（tools/mkfs/mkfs.c:56-59,82-84）— 已修 934f761（块循环内 put_sector 前拦截，镜像满截短并停止种子），ctest 7/7
+- [x] 审核发现：fs do_write 零长写仍惰性认领新块——len 被夹到 0 后仍走 alloc_block() 并回写该块，恶意客户端可反复零长写耗尽数据块（servers/fs/fsrw.c:78-88）— 已修 51a4c45（len==0 直接回 0 不认领），ctest 7/7
+- [ ] 审核发现：测试缺口——本轮新增防御路径（bad inode 拒绝、do_commit size>MAXFILE 拒绝、负/超长 IPC 长度归零、runt ARP 拦截、mkfs 镜像满、TCP SEND>MSG_DATA 夹限）均无直接单测，现有 ctest 7 项为 QEMU 冒烟快乐路径，未触发上述边界 — 尝试过宿主单测（tests/unit 直接 #include 真源码），编译可过但本机无 32 位 libc（gcc-multilib 缺失，链接报 Scrt1.o/-lgcc 不可得），已丢弃；护栏路径目前靠代码走查背书
+- [x] 审核发现：相关残留（非本轮引入）——net_rx 只拦 runt ARP，同函数 IP 分支 ip_in 仍假设载荷含完整 UDP/TCP 头；声明 total==ihl 的空载荷帧在 ip[ihl+2..3] 越过收到帧读陈旧字节（仍在 RX_BUF 内不崩溃，但可按脏字节误分发端口）（servers/net/net.c:363-380,1007）— 已修 ea2807c（UDP/TCP 分支前 total-ihl<4 直接丢弃），ctest 7/7
+- [x] 巡检发现：arp_in 回复目标字段偏移 +2——tha 写在 f+34（应 f+32）、tpa 写在 f+40（应 f+38），42 字节帧越界写 2 字节且回复帧畸形（servers/net/net.c:306-307，-m32 宿主编译 -Wstringop-overflow 捕获）— 已修 ea2807c（两处归位 f+32/f+38），ctest 7/7
