@@ -3,6 +3,10 @@
 ## 待办
 
 - [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）
+- [ ] IPC 边界防御：fs/net 服务解 m->arg1/arg2 长度与 m->arg0 inode 索引前先校验负值/上限（发现 4-5，docs/review/2026-11-01-code-review.md）
+- [ ] net 校验 ARP 帧长 ≥42、con_write 负长显式拒绝（发现 6-7）
+- [ ] fs do_commit 校验 size ≤ MAXFILE（发现 8）
+- [ ] 清理小项：tty_getline 负参、ICMP 奇长校验和残留、walkthrough grep 过宽、mkfs next_block 守卫（发现 9-12）
 
 ## 已完成
 
@@ -24,3 +28,7 @@
 - [x] 审计表 B1/B2 行号范围漂移改正 — 见 docs/审计-文档一致性.md, 2026-11-02 复核
 - [x] README 测试口径对齐 ci.yml（B3）— 见 docs/审计-文档一致性.md, 2026-11-02 复核
 - [x] 台账瘦身去叙述、审计追踪归审计表（B4）— 见 docs/审计-文档一致性.md, 2026-11-02 复核
+- [x] 系统调用门用户指针校验 — 4391cb5, ctest 7/7
+- [x] cmd_write 写盘失败护栏 — dd2cac9, ctest 7/7
+- [x] TCP 重传 snd_nxt 固定 una+len — dd8105e, ctest 7/7
+- [x] 全仓代码深审报告 — docs/review/2026-11-01-code-review.md, 2026-11-02
