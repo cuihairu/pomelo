@@ -76,6 +76,11 @@ int main(int argc, char **argv) {
         snprintf(inodes[slot].name, sizeof inodes[slot].name, "%.11s", e->d_name);
         inodes[slot].size = (uint32_t)size;
         for (int b = 0; b * SECTOR < size; b++) {
+            if (next_block >= NDATA) {         /* image full mid-file */
+                fprintf(stderr, "mkfs: image full at %u blocks\n", next_block);
+                inodes[slot].size = (uint32_t)(b * SECTOR);
+                break;
+            }
             fseek(f, b * SECTOR, SEEK_SET);
             uint8_t buf[SECTOR] = {0};
             if (fread(buf, 1, SECTOR, f) == 0) break;
@@ -85,6 +90,7 @@ int main(int argc, char **argv) {
         }
         fclose(f);
         printf("seeded /%s (%ld bytes)\n", e->d_name, size);
+        if (next_block >= NDATA) break;        /* image is now full */
     }
     closedir(d);
 
