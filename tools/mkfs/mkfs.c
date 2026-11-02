@@ -53,6 +53,10 @@ int main(int argc, char **argv) {
     struct dirent *e;
     while ((e = readdir(d))) {
         if (e->d_name[0] == '.') continue;
+        if (next_block >= NDATA) {             /* image full: stop seeding */
+            fprintf(stderr, "mkfs: image full at %u blocks\n", next_block);
+            break;
+        }
 
         char path[512];
         snprintf(path, sizeof path, "%s/%s", argv[2], e->d_name);

@@ -301,11 +301,16 @@ static void arp_in(const u8 *a) {
 
 /* --- ipv4 -------------------------------------------------------------------- */
 
-/* The one's-complement checksum over n (even) bytes, per rfc 1071. */
+/* The one's-complement checksum over n bytes, per rfc 1071. An odd
+ * trailing byte is zero-padded, so a stale byte past a runt segment
+ * can never leak into the sum. */
 static u16 cksum(const u8 *b, int n) {
     u32 s = 0;
-    for (int i = 0; i < n; i += 2)
-        s += (u32)((b[i] << 8) | b[i + 1]);
+    for (int i = 0; i < n; i += 2) {
+        u32 w = (u32)b[i] << 8;
+        if (i + 1 < n) w |= b[i + 1];
+        s += w;
+    }
     while (s >> 16)
         s = (s & 0xFFFF) + (s >> 16);
     return (u16)(~s & 0xFFFF);

@@ -50,7 +50,7 @@ send() {
     want=$((want + 1))
     count=0
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        count=$(grep -c 'pomelo> ' "$out" 2>/dev/null) || count=0
+        count=$(grep -c '^pomelo> ' "$out" 2>/dev/null) || count=0
         [ "$count" -ge "$want" ] && break
         sleep 0.25
     done

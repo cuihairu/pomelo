@@ -43,6 +43,7 @@ void tty_puts(const char *s) {
 }
 
 void tty_getline(char *buf, int max) {
+    if (max <= 0) return;                 /* never cap below the buffer */
     struct msg m;
     memset(&m, 0, sizeof m);
     m.type = MSG_TTY_GETLINE;
