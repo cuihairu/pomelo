@@ -89,7 +89,8 @@ int main(int argc, char **argv) {
             inodes[slot].direct[b] = lba;
         }
         fclose(f);
-        printf("seeded /%s (%ld bytes)\n", e->d_name, size);
+        printf("seeded /%s (%lu bytes)\n", e->d_name,
+               (unsigned long)inodes[slot].size);
         if (next_block >= NDATA) break;        /* image is now full */
     }
     closedir(d);
