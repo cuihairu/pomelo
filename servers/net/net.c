@@ -370,26 +370,27 @@ static void sock_in_tcp(struct sock *s, const u8 *t, int len, const u8 src[4]);
  * whichever socket owns the port. The header checksum is verified --
  * answering broken packets is the kind of bug that costs an afternoon
  * to find. */
-static void ip_in(const u8 *ip, int len) {
-    if (len < 20 || (ip[0] >> 4) != 4) return;
+static int ip_in(const u8 *ip, int len) {
+    if (len < 20 || (ip[0] >> 4) != 4) return 0;
     int ihl = (ip[0] & 0xF) * 4;
     int total = (ip[2] << 8) | ip[3];
-    if (ihl < 20 || total > len || total < ihl) return;
-    if (cksum(ip, ihl)) return;           /* nonzero after the fold: bad */
-    if (memcmp(ip + 16, ip_self, 4)) return;
+    if (ihl < 20 || total > len || total < ihl) return 0;
+    if (cksum(ip, ihl)) return 0;         /* nonzero after the fold: bad */
+    if (memcmp(ip + 16, ip_self, 4)) return 0;
     if (ip[9] == IP_PROTO_ICMP)
         icmp_in(ip + ihl, total - ihl, ip + 12);
     else if (ip[9] == IP_PROTO_UDP) {
-        if (total - ihl < 4) return;           /* no room for the port pair */
+        if (total - ihl < 4) return 0;         /* no room for the port pair */
         struct sock *s = sock_by_port(IP_PROTO_UDP,
                                       (u16)((ip[ihl + 2] << 8) | ip[ihl + 3]));
         if (s) sock_in_udp(s, ip + ihl, total - ihl, ip + 12);
     } else if (ip[9] == IP_PROTO_TCP) {
-        if (total - ihl < 4) return;           /* no room for the port pair */
+        if (total - ihl < 4) return 0;         /* no room for the port pair */
         struct sock *s = sock_by_port(IP_PROTO_TCP,
                                       (u16)((ip[ihl + 2] << 8) | ip[ihl + 3]));
         if (s) sock_in_tcp(s, ip + ihl, total - ihl, ip + 12);
     }
+    return 1;
 }
 
 /* --- icmp -------------------------------------------------------------------- */
@@ -1015,7 +1016,7 @@ static void net_rx(const u8 *f, int len) {
         arp_in(f + 14);
     }
     else if (et == ETH_IP)
-        ip_in(f + 14, len - 14);
+        (void)ip_in(f + 14, len - 14);
 }
 
 /* --- the service --------------------------------------------------------------- */
