@@ -39,7 +39,7 @@ jobs:
       - name: install qemu
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends qemu-system-x86 socat
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 socat gcc-multilib
 
       - name: build
         run: |

@@ -155,20 +155,31 @@ set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net smoke-clear
 # Host-side unit tests for the IPC and frame hardening added in the
 # November audit. They include the production sources (fsrw.c / net.c)
 # and link against the host 32-bit libc, so the guards under test are
-# the same ones the services run. -m32 needs gcc-multilib.
-add_executable(unit-fs tests/unit/test_fs.c)
-target_compile_options(unit-fs PRIVATE -m32 -O0 -g -Wall -Wextra)
-target_link_options(unit-fs PRIVATE -m32)
-target_compile_definitions(unit-fs PRIVATE __POMELO_HOST_UNIT__)
-target_include_directories(unit-fs PRIVATE ${CMAKE_SOURCE_DIR})
-add_test(NAME unit-fs COMMAND unit-fs)
+# the same ones the services run. -m32 needs gcc-multilib. Probe for it at
+# configure time so a host without the 32-bit runtime degrades gracefully
+# (skips these unit tests) instead of failing the whole build.
+include(CheckCSourceCompiles)
+set(CMAKE_REQUIRED_FLAGS "-m32")
+check_c_source_compiles("int main(void){return 0;}" POMELO_CAN_LINK_M32)
+unset(CMAKE_REQUIRED_FLAGS)
+if(POMELO_CAN_LINK_M32)
+    add_executable(unit-fs tests/unit/test_fs.c)
+    target_compile_options(unit-fs PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-fs PRIVATE -m32)
+    target_compile_definitions(unit-fs PRIVATE __POMELO_HOST_UNIT__)
+    target_include_directories(unit-fs PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-fs COMMAND unit-fs)
 
-add_executable(unit-net tests/unit/test_net.c)
-target_compile_options(unit-net PRIVATE -m32 -O0 -g -Wall -Wextra)
-target_link_options(unit-net PRIVATE -m32)
-target_compile_definitions(unit-net PRIVATE __POMELO_HOST_UNIT__)
-target_include_directories(unit-net PRIVATE ${CMAKE_SOURCE_DIR})
-add_test(NAME unit-net COMMAND unit-net)
+    add_executable(unit-net tests/unit/test_net.c)
+    target_compile_options(unit-net PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-net PRIVATE -m32)
+    target_compile_definitions(unit-net PRIVATE __POMELO_HOST_UNIT__)
+    target_include_directories(unit-net PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-net COMMAND unit-net)
+else()
+    message(STATUS "32-bit host libc (gcc-multilib) not found; "
+        "skipping unit-fs/unit-net")
+endif()
 
 add_test(NAME unit-mkfs
     COMMAND sh ${CMAKE_SOURCE_DIR}/tests/unit/test_mkfs.sh $<TARGET_FILE:mkfs>)
