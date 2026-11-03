@@ -157,13 +157,15 @@ set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net smoke-clear
 # and link against the host 32-bit libc, so the guards under test are
 # the same ones the services run. -m32 needs gcc-multilib.
 add_executable(unit-fs tests/unit/test_fs.c)
-target_compile_options(unit-fs PRIVATE -O0 -g -Wall -Wextra)
+target_compile_options(unit-fs PRIVATE -m32 -O0 -g -Wall -Wextra)
+target_link_options(unit-fs PRIVATE -m32)
 target_compile_definitions(unit-fs PRIVATE __POMELO_HOST_UNIT__)
 target_include_directories(unit-fs PRIVATE ${CMAKE_SOURCE_DIR})
 add_test(NAME unit-fs COMMAND unit-fs)
 
 add_executable(unit-net tests/unit/test_net.c)
-target_compile_options(unit-net PRIVATE -O0 -g -Wall -Wextra)
+target_compile_options(unit-net PRIVATE -m32 -O0 -g -Wall -Wextra)
+target_link_options(unit-net PRIVATE -m32)
 target_compile_definitions(unit-net PRIVATE __POMELO_HOST_UNIT__)
 target_include_directories(unit-net PRIVATE ${CMAKE_SOURCE_DIR})
 add_test(NAME unit-net COMMAND unit-net)
