@@ -1021,8 +1021,10 @@ static void net_rx(const u8 *f, int len) {
 /* --- the service --------------------------------------------------------------- */
 
 void net_main(void);
+#ifndef __POMELO_HOST_UNIT__
 __attribute__((section(".hdr")))
 const unsigned net_entry = (unsigned)net_main;
+#endif
 
 void net_main(void) {
     net_bringup();
