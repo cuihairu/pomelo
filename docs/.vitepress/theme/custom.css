@@ -130,8 +130,3 @@
 .VPDoc.has-aside .content-container {
   max-width: 960px !important;
 }
-.vp-doc table {
-  display: block;
-  overflow-x: auto;
-}
-

@@ -54,4 +54,5 @@
 - [x] 审核发现：审核完成 a962093..c22d096（rev-list count=3 含 ea42a7a/f47e4a0/c22d096，三者均仅改 todo.md，无代码问题）；本轮发现 2 项均已修；ctest 10/10
 - [x] 审核发现：审计记录范围未覆盖 ea42a7a——第 54 行称「审核完成 ea42a7a..f47e4a0」，但 git 范围 ea42a7a..f47e4a0 仅含 f47e4a0（ea42a7a 为其直接父提交，被排除），而上一轮审计记录（第 53 行，落于 a962093）已止于 a962093，故 ea42a7a（docs: refresh blocked vitepress check）未被任何审计记录覆盖，审计追踪有缺口（todo.md:54）— 属实；已修：审计记录改为 a962093..c22d096（rev-list count=3 含 ea42a7a/f47e4a0/c22d096）；ctest 10/10
 - [x] 审核发现：第 54 行格式不符本节约定——其余条目均为「- [x] 审核发现：…」复选框格式，该行以裸文本追加、无复选框且无「审核发现：」前缀，无法作为勾选项追踪（todo.md:54）— 属实；已修：第 54 行改为「- [x] 审核发现：…」复选框格式；ctest 10/10
-- [ ] 审核发现：本轮 diff 未见问题（c22d0961..HEAD）。
+不属实：c22d096..HEAD 并非未见问题——ded53d8 新增 `.vp-doc table { display:block; overflow-x:auto }` 冗余规则，正由下一条处理（rev-list count=3：9e8b568/ded53d8/d810f00）。
+- [x] 审核发现：custom.css 新增 `.vp-doc table { display:block; overflow-x:auto }` 与 VitePress 默认规则（vp-doc.css:166-172 已含 display:block 与 overflow-x:auto）完全重复，为纯 no-op 冗余样式，可删除（docs/.vitepress/theme/custom.css:133-136）— 属实；已修（删除 docs/.vitepress/theme/custom.css:133-136 冗余规则）；docs build 绿、ctest 10/10
