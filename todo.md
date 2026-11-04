@@ -2,7 +2,7 @@
 
 ## 待办
 
-- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-04 复查仍 latest=1.6.4；2026-11-04 再复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable）
+- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-04 复查仍 latest=1.6.4；2026-11-05 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable）
 - [x] IPC 边界防御：fs/net 服务解 m->arg1/arg2 长度与 m->arg0 inode 索引前先校验负值/上限（发现 4-5，docs/review/2026-11-01-code-review.md）— servers/fs/fsrw.c 加 ino_at 校验索引/未用槽、do_write 负 len 归零、do_commit size≤MAXFILE；servers/net/net.c sock_consume/UDP/SEND 负 len 归零、夹上限；ctest 7/7
 - [x] net 校验 ARP 帧长 ≥42（发现 6）— servers/net/net.c net_rx 加 len<ETH_HDR+28 拦截；ctest 7/7
 - [x] fs do_commit 校验 size ≤ MAXFILE（发现 8）— b618ce7 IPC 提交 do_commit 已加 size≤MAXFILE 拒绝；ctest 7/7
@@ -51,4 +51,6 @@
 - [x] 审核发现：test_net.c 空载荷断言恒真——CHECK(1,...) 为常量真，仅依赖 ip_in 不崩溃的副作用，未断言任何可观测结果；若 ip_in 未来改动引入越界读或误分发端口，该测试仍会通过（tests/unit/test_net.c:32-39）— 属实；已修 27c791b（ip_in 改回 int 返回是否接受，空载荷 total==ihl 断言返回 0 拒绝，ASan 复核无越界读；net_rx 调用处 (void) 丢弃）；ctest 10/10
 - [x] 审核发现：unit-fs/unit-net 新增 -m32 编译+链接选项为无条件硬依赖——两目标未加 EXCLUDE_FROM_ALL、属默认 all 构建，且无 configure 期 check_c_compiler_flag 检测或开关；宿主机缺 32 位 multilib（gcc-multilib/libc6-dev-i386）时，默认 make 在链接期报「cannot find -lgcc / -m32 不支持」等晦涩错误而整体失败（kernel/iso/冒烟测试被连带阻塞），而非仅单元测试不可用（CMakeLists.txt:160-161,167-168；注释已写明需 gcc-multilib 但无检测与优雅降级；本机已装 multilib，实测 ctest 10/10 全绿，unit-fs/unit-net 经 file 确认 ELF 32-bit）— 属实；已修 39f160b（CMakeLists.txt:162-181 用 check_c_source_compiles 在 configure 期以 -m32 探测 32 位宿主 libc，不可用时优雅跳过 unit-fs/unit-net 而非中断默认构建；ci.yml:42 增装 gcc-multilib 保持 CI 单测覆盖）；本机 32 位链可用，ctest 10/10 全绿
 - [x] 审核发现：本轮 diff 未见问题（02f16c3a..HEAD，仅 CMakeLists.txt/ci.yml/todo.md）— 复核 m32 探测降级与 CI multilib 安装均正确；重新 configure/build 后本机 ctest 10/10 全绿。
-审核完成 ea42a7aa55c9..f47e4a0，无发现；ctest 10/10
+- [x] 审核发现：审核完成 a962093..c22d096（rev-list count=3 含 ea42a7a/f47e4a0/c22d096，三者均仅改 todo.md，无代码问题）；本轮发现 2 项均已修；ctest 10/10
+- [x] 审核发现：审计记录范围未覆盖 ea42a7a——第 54 行称「审核完成 ea42a7a..f47e4a0」，但 git 范围 ea42a7a..f47e4a0 仅含 f47e4a0（ea42a7a 为其直接父提交，被排除），而上一轮审计记录（第 53 行，落于 a962093）已止于 a962093，故 ea42a7a（docs: refresh blocked vitepress check）未被任何审计记录覆盖，审计追踪有缺口（todo.md:54）— 属实；已修：审计记录改为 a962093..c22d096（rev-list count=3 含 ea42a7a/f47e4a0/c22d096）；ctest 10/10
+- [x] 审核发现：第 54 行格式不符本节约定——其余条目均为「- [x] 审核发现：…」复选框格式，该行以裸文本追加、无复选框且无「审核发现：」前缀，无法作为勾选项追踪（todo.md:54）— 属实；已修：第 54 行改为「- [x] 审核发现：…」复选框格式；ctest 10/10
