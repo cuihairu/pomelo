@@ -2,7 +2,7 @@
 
 ## 待办
 
-- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-04 复查仍 latest=1.6.4；2026-11-05 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable）
+- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-04 复查仍 latest=1.6.4；2026-11-05 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable；2026-11-06 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable）
 - [x] IPC 边界防御：fs/net 服务解 m->arg1/arg2 长度与 m->arg0 inode 索引前先校验负值/上限（发现 4-5，docs/review/2026-11-01-code-review.md）— servers/fs/fsrw.c 加 ino_at 校验索引/未用槽、do_write 负 len 归零、do_commit size≤MAXFILE；servers/net/net.c sock_consume/UDP/SEND 负 len 归零、夹上限；ctest 7/7
 - [x] net 校验 ARP 帧长 ≥42（发现 6）— servers/net/net.c net_rx 加 len<ETH_HDR+28 拦截；ctest 7/7
 - [x] fs do_commit 校验 size ≤ MAXFILE（发现 8）— b618ce7 IPC 提交 do_commit 已加 size≤MAXFILE 拒绝；ctest 7/7
@@ -54,5 +54,6 @@
 - [x] 审核发现：审核完成 a962093..c22d096（rev-list count=3 含 ea42a7a/f47e4a0/c22d096，三者均仅改 todo.md，无代码问题）；本轮发现 2 项均已修；ctest 10/10
 - [x] 审核发现：审计记录范围未覆盖 ea42a7a——第 54 行称「审核完成 ea42a7a..f47e4a0」，但 git 范围 ea42a7a..f47e4a0 仅含 f47e4a0（ea42a7a 为其直接父提交，被排除），而上一轮审计记录（第 53 行，落于 a962093）已止于 a962093，故 ea42a7a（docs: refresh blocked vitepress check）未被任何审计记录覆盖，审计追踪有缺口（todo.md:54）— 属实；已修：审计记录改为 a962093..c22d096（rev-list count=3 含 ea42a7a/f47e4a0/c22d096）；ctest 10/10
 - [x] 审核发现：第 54 行格式不符本节约定——其余条目均为「- [x] 审核发现：…」复选框格式，该行以裸文本追加、无复选框且无「审核发现：」前缀，无法作为勾选项追踪（todo.md:54）— 属实；已修：第 54 行改为「- [x] 审核发现：…」复选框格式；ctest 10/10
-不属实：c22d096..HEAD 并非未见问题——ded53d8 新增 `.vp-doc table { display:block; overflow-x:auto }` 冗余规则，正由下一条处理（rev-list count=3：9e8b568/ded53d8/d810f00）。
+- [x] 审核发现：本轮 diff 未见问题（c22d096..HEAD）— 不属实：c22d096..HEAD 并非未见问题，ded53d8 新增 `.vp-doc table { display:block; overflow-x:auto }` 冗余规则（rev-list count=3：9e8b568/ded53d8/d810f00），由下条核销；ctest 10/10
 - [x] 审核发现：custom.css 新增 `.vp-doc table { display:block; overflow-x:auto }` 与 VitePress 默认规则（vp-doc.css:166-172 已含 display:block 与 overflow-x:auto）完全重复，为纯 no-op 冗余样式，可删除（docs/.vitepress/theme/custom.css:133-136）— 属实；已修（删除 docs/.vitepress/theme/custom.css:133-136 冗余规则）；docs build 绿、ctest 10/10
+- [x] 审核发现：todo.md:57 新增裸文本行「不属实：…」无复选框且无「审核发现：」前缀，违反本节「- [x] 审核发现：…」约定、无法作为勾选项追踪，与第 56 行已修的同类格式问题一致（todo.md:57）— 属实；已修：todo.md:57 改为规范格式（勾选项，含「不属实：」注记）；无代码变更故未 commit；ctest 10/10
