@@ -2,7 +2,7 @@
 
 ## 待办
 
-- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-04 复查仍 latest=1.6.4；2026-11-05 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable；2026-11-06 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable）
+- [ ] vitepress 2.x stable 后去 pnpm overrides 原生升级重验 build 与教材产物（触发：npm dist-tags latest 升 2.x，当前 latest=1.6.4、next=2.0.0-alpha.21；验收：tools/docs-chapters.sh save/check 34 页零漂移）— BLOCKED：等上游 latest 升 2.x（2026-11-04 复查仍 latest=1.6.4；2026-11-05 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable；2026-11-06 复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable；2026-11-06 再次复核仍 latest=1.6.4，next=2.0.0-alpha.21 未转 stable，所缺仍为上游 latest 升 2.x）
 - [x] IPC 边界防御：fs/net 服务解 m->arg1/arg2 长度与 m->arg0 inode 索引前先校验负值/上限（发现 4-5，docs/review/2026-11-01-code-review.md）— servers/fs/fsrw.c 加 ino_at 校验索引/未用槽、do_write 负 len 归零、do_commit size≤MAXFILE；servers/net/net.c sock_consume/UDP/SEND 负 len 归零、夹上限；ctest 7/7
 - [x] net 校验 ARP 帧长 ≥42（发现 6）— servers/net/net.c net_rx 加 len<ETH_HDR+28 拦截；ctest 7/7
 - [x] fs do_commit 校验 size ≤ MAXFILE（发现 8）— b618ce7 IPC 提交 do_commit 已加 size≤MAXFILE 拒绝；ctest 7/7
@@ -60,3 +60,4 @@
 - [x] 审核发现：todo.md:59 新增条目自述「无代码变更故未 commit」，但本修复（todo.md:57 改规范格式）已随 a98391f 提交且工作树干净，「未 commit」与 git 事实矛盾（实为「未另立独立代码 commit」之意），且与同节第 54-58 行同类条目「已修…；ctest 10/10」的记录口径不一，易误导后续审计者误判该修复未入库（todo.md:59）— 属实；已修：todo.md:59 更正为「修复已随 a98391f 提交」（`git show a98391f -- todo.md` 含该修复）；ctest 10/10
 - [x] 审核发现：本轮 diff 未见问题（a98391fc2f3ad881c9afa0160504b71b54d0c230..HEAD）— 属实：git diff a98391fc2f3ad881c9afa0160504b71b54d0c230..HEAD --stat 复核仅 todo.md 2+/1-（当日 HEAD=3a4fc936945264e807ad739435e0f015e03559f2），单 docs 提交且台账事实核对无问题；ctest 10/10（todo.md:61）
 - [x] 审核发现：本轮 diff 未见问题（3a4fc936..HEAD）— 属实：`git diff 3a4fc936..HEAD --stat` 复核仅 `todo.md | 1 +`，范围仅 `5950ca3 docs: verify audit ledger round a98391f..HEAD`，无代码变更；`ctest --output-on-failure` 10/10 通过（todo.md:62）。
+- [x] 审核发现：本轮 diff 未见问题（5950ca32..HEAD）— 属实：`git rev-list 5950ca32..HEAD` 仅含 `1f2c1b9`（docs: verify audit ledger round 3a4fc936..HEAD），`git diff 5950ca32..HEAD --stat` 复核仅 `todo.md | 1 +`，无代码变更；`ctest --output-on-failure` 10/10 通过。
