@@ -56,4 +56,5 @@
 - [x] 审核发现：第 54 行格式不符本节约定——其余条目均为「- [x] 审核发现：…」复选框格式，该行以裸文本追加、无复选框且无「审核发现：」前缀，无法作为勾选项追踪（todo.md:54）— 属实；已修：第 54 行改为「- [x] 审核发现：…」复选框格式；ctest 10/10
 - [x] 审核发现：本轮 diff 未见问题（c22d096..HEAD）— 不属实：c22d096..HEAD 并非未见问题，ded53d8 新增 `.vp-doc table { display:block; overflow-x:auto }` 冗余规则（rev-list count=3：9e8b568/ded53d8/d810f00），由下条核销；ctest 10/10
 - [x] 审核发现：custom.css 新增 `.vp-doc table { display:block; overflow-x:auto }` 与 VitePress 默认规则（vp-doc.css:166-172 已含 display:block 与 overflow-x:auto）完全重复，为纯 no-op 冗余样式，可删除（docs/.vitepress/theme/custom.css:133-136）— 属实；已修（删除 docs/.vitepress/theme/custom.css:133-136 冗余规则）；docs build 绿、ctest 10/10
-- [x] 审核发现：todo.md:57 新增裸文本行「不属实：…」无复选框且无「审核发现：」前缀，违反本节「- [x] 审核发现：…」约定、无法作为勾选项追踪，与第 56 行已修的同类格式问题一致（todo.md:57）— 属实；已修：todo.md:57 改为规范格式（勾选项，含「不属实：」注记）；无代码变更故未 commit；ctest 10/10
+- [x] 审核发现：todo.md:57 新增裸文本行「不属实：…」无复选框且无「审核发现：」前缀，违反本节「- [x] 审核发现：…」约定、无法作为勾选项追踪，与第 56 行已修的同类格式问题一致（todo.md:57）— 属实；已修：todo.md:57 改为规范格式（勾选项，含「不属实：」注记）；修复已随 a98391f 提交；ctest 10/10
+- [x] 审核发现：todo.md:59 新增条目自述「无代码变更故未 commit」，但本修复（todo.md:57 改规范格式）已随 a98391f 提交且工作树干净，「未 commit」与 git 事实矛盾（实为「未另立独立代码 commit」之意），且与同节第 54-58 行同类条目「已修…；ctest 10/10」的记录口径不一，易误导后续审计者误判该修复未入库（todo.md:59）— 属实；已修：todo.md:59 更正为「修复已随 a98391f 提交」（`git show a98391f -- todo.md` 含该修复）；ctest 10/10
