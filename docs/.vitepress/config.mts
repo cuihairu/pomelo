@@ -17,6 +17,8 @@ export default defineConfig({
           {
             text: 'Getting started',
             items: [
+              { text: '00 · Glossary', link: '/guide/glossary' },
+              { text: 'Architecture layers', link: '/guide/architecture' },
               { text: '01 · What kind of kernel is this', link: '/guide/intro' },
               { text: '02 · Startup', link: '/guide/boot' },
               { text: '03 · Interrupt dispatch', link: '/guide/interrupts' },
@@ -65,6 +67,8 @@ export default defineConfig({
           {
             text: '从零开始',
             items: [
+              { text: '00 · 术语表', link: '/zh/guide/glossary' },
+              { text: '架构分层', link: '/zh/guide/architecture' },
               { text: '01 · 这是一个怎样的内核', link: '/zh/guide/intro' },
               { text: '02 · 启动', link: '/zh/guide/boot' },
               { text: '03 · 中断分发', link: '/zh/guide/interrupts' },
