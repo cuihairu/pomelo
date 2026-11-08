@@ -3,18 +3,23 @@
 # rebuild against the snapshot.
 #
 # The vitepress 2.x upgrade (todo.md) has to land with "the 16
-# chapters show no regression". Eyeballing 34 built pages is not a gate, so
+# chapters show no regression". Eyeballing the built pages is not a gate, so
 # this script stores the pages built with the currently pinned dependencies
 # and checks a later build against them. Asset filenames carry content hashes
 # and every build rewrites them, so assets/* references are normalized away --
 # the diff is for chapter content drift, not for chunk renaming.
 #
 # usage: tools/docs-chapters.sh save | check
-#   save   build the site and store the 34 site pages under build/docs-baseline
+#   save   build the site and store the site pages under build/docs-baseline
 #   check  build the site and diff every page against the baseline;
 #          exit 1 on any drift, 2 when there is no baseline to check against
 
 set -e
+
+# Invoked from anywhere; every path below (build/docs-baseline, the
+# dist tree, the pnpm prefix) is relative to the repository root, so
+# pin it first -- running from elsewhere used to move the baseline.
+cd "$(dirname "$0")/.."
 
 mode="$1"
 base="build/docs-baseline"
@@ -34,7 +39,8 @@ if [ "$mode" = save ]; then
     cp "$dist/zh/index.html" "$base/zh/index.html"
     cp "$dist"/guide/*.html "$base/guide/"
     cp "$dist"/zh/guide/*.html "$base/zh/guide/"
-    echo "docs-chapters ok: saved 34 site pages to $base"
+    n=$(find "$base" -name '*.html' | wc -l)
+    echo "docs-chapters ok: saved $n site pages to $base"
     exit 0
 fi
 
