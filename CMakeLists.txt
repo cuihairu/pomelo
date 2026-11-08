@@ -122,6 +122,16 @@ add_custom_target(run
 
 enable_testing()
 set(KERNEL_ELF ${CMAKE_BINARY_DIR}/kernel)
+
+# The QEMU tests share one disk image, and the walkthrough writes into
+# it. A fixture rebuilds the image from the seed directory at the start
+# of each ctest run, so one round's walk.txt never bleeds into the next
+# (and `ls` keeps listing the seed's two files instead of a growing
+# tail of test leftovers -- see todo.md, image-pollution finding).
+add_test(NAME fresh-image
+    COMMAND $<TARGET_FILE:mkfs> ${IMG} ${CMAKE_SOURCE_DIR}/tools/mkfs/seed)
+set_tests_properties(fresh-image PROPERTIES FIXTURES_SETUP pomelo-image)
+
 add_test(NAME smoke
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/smoke.sh
@@ -151,7 +161,8 @@ add_test(NAME walkthrough
     COMMAND sh ${CMAKE_SOURCE_DIR}/tools/walkthrough.sh
             ${QEMU} ${KERNEL_ELF} ${IMG} walkthrough.log)
 set_tests_properties(smoke smoke-ps2 smoke-mouse smoke-net smoke-clear
-    smoke-reboot walkthrough PROPERTIES TIMEOUT 120)
+    smoke-reboot walkthrough PROPERTIES TIMEOUT 120
+    FIXTURES_REQUIRED pomelo-image)
 
 # Host-side unit tests for the IPC and frame hardening added in the
 # November audit. They include the production sources (fsrw.c / net.c)
