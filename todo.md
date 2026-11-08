@@ -45,12 +45,12 @@
   - 引导与平台：完成从 multiboot 到初始化依赖顺序和首批任务 spawn 的平台装配 — `boot/main.c:21-63`
   - 内核机制：只保留中断分发、分页、调度、IPC 和系统调用门五个通用机制 — `kernel/syscall/syscall.c:37-122`
   - 内核专属输入输出：把 IRQ1/IRQ4/IRQ12 硬件事件转成消息，并经系统调用渲染控制台 — `kernel/char.c:99-138`
-  - 用户态服务：fs、tty、net 在 ring 3 分别持有磁盘、终端行规程和网络/socket 状态 — `servers/net/net.c:1030-1078`
+  - 用户态服务：fs、tty、net 在 ring 3 分别持有磁盘、终端行规程和网络/socket 状态 — `servers/net/net.c:83-95`
   - 应用：shell、netsh、probe 作为薄客户端，只经消息协议或系统调用驱动服务 — `apps/shell/shell.c:84-98`
   - 构建与打包：把 ring 3 程序链接为扁平镜像并嵌入内核，生成宿主磁盘镜像 — `CMakeLists.txt:14-48`
   - 验证与配置：以 QEMU 调用参数表达运行期输入，并通过真实启动路径断言外部行为 — `CMakeLists.txt:113-153`
 - 超大文件候选：
-  - [ ] LAY-001 [P1] 拆分 servers/net/net.c（1078 行）——单一文件混合 e1000 驱动、ARP/IP/ICMP/UDP/TCP、socket 状态机和 IPC 服务接口（servers/net/net.c:115,263,369,435,860,1009）
+  - [x] LAY-001 [P1] 拆分 servers/net/net.c（1078 行）——单一文件混合 e1000 驱动、ARP/IP/ICMP/UDP/TCP、socket 状态机和 IPC 服务接口（servers/net/net.c:115,263,369,435,860,1009）— 1a9e5f5 拆为 nic.c/arp.c/ip.c/sock.c/net.c + 内部 proto.h（net.c 1078→95 行）；unet/unit-net 目标改编译五 TU；教材 net/architecture/glossary 与 code-review 报告行号对齐；全新构建零告警 + docs build 绿 + ctest 10/10 全绿（2026-11-09 机器满载 93-199 负载时 smoke/smoke-ps2 偶发 20s 串口 pacing 超时，单独复跑各绿；smoke-net/walkthrough/unit-net 逐项绿）
 - 目录/分类问题：
   - [ ] `kernel/char.c`、`kernel/mouse.c` 和 `kernel/vga.c` 是控制台硬件策略，不是五内核机制；应归入独立的 platform-console 分类并在 README Layout 中区分（kernel/char.c:7-14）
   - [ ] `tests/unit/test_fs.c` 和 `tests/unit/test_net.c` 通过源码包含把宿主测试耦合进生产文件，依赖 `__POMELO_HOST_UNIT__` 分支；更适合提取可测试边界的宿主 shim 或按目标产物测试（tests/unit/test_fs.c:1-12, tests/unit/test_net.c:1-12）
@@ -79,3 +79,5 @@
 - [x] 审核发现：本轮 diff 未见问题（a98391fc2f3ad881c9afa0160504b71b54d0c230..HEAD）— 属实：git diff a98391fc2f3ad881c9afa0160504b71b54d0c230..HEAD --stat 复核仅 todo.md 2+/1-（当日 HEAD=3a4fc936945264e807ad739435e0f015e03559f2），单 docs 提交且台账事实核对无问题；ctest 10/10（todo.md:61）
 - [x] 审核发现：本轮 diff 未见问题（3a4fc936..HEAD）— 属实：`git diff 3a4fc936..HEAD --stat` 复核仅 `todo.md | 1 +`，范围仅 `5950ca3 docs: verify audit ledger round a98391f..HEAD`，无代码变更；`ctest --output-on-failure` 10/10 通过（todo.md:62）。
 - [x] 审核发现：本轮 diff 未见问题（5950ca32..HEAD）— 属实：`git rev-list 5950ca32..HEAD` 仅含 `1f2c1b9`（docs: verify audit ledger round 3a4fc936..HEAD），`git diff 5950ca32..HEAD --stat` 复核仅 `todo.md | 1 +`，无代码变更；`ctest --output-on-failure` 10/10 通过。
+- [x] 审核发现：QEMU 测试共享 `build/pomelo.img` 状态累积——walkthrough（tools/walkthrough.sh:69 `write walk.txt ...`）每次运行经 `fs_create` 新增一个 walk.txt inode 且不删，镜像跨 ctest 轮次持久；实测 build/pomelo.img 含 2 种子 + 25 个 walk.txt inode（共 27，NINODES=32 封顶），全新 mkfs 镜像仅 2 条；后果一（已发生）：smoke 的 ls 输出被走查残留行刷屏、串口 pacing 拖慢，在满载机器上 20s 超时偶发（2026-11-09 复现，单独复跑绿）；后果二（临界）：NINODES=32 再 ~30 轮 walkthrough 后 `write walk.txt` 将答「no space left」、walkthrough 断言 `wrote 18 bytes to walk.txt` 永久失败——测试基建应使每次 ctest 从干净镜像起步（如 ctest fixture 先跑 mkfs 重建 ${IMG}）— 已修：CMakeLists.txt 增 `fresh-image` fixture（FIXTURES_SETUP pomelo-image，QEMU 七项 FIXTURES_REQUIRED），每次 ctest 先重建 ${IMG}；实测 fixture 后镜像仅 2 种子、smoke ls 输出回到 3 行；ctest -R smoke 先跑 fresh-image 再 smoke 全绿；严重度：P2（测试可靠性，非产品代码）
+- [ ] 审核发现：full-suite 在满负载机器上 smoke/smoke-ps2 偶发失败——`tools/smoke.sh`/`smoke-ps2.sh` 以固定 sleep 驱动串口输入，`timeout 20` 封顶；2026-11-09 机器 load avg 93-199（14 核，rustc/java 满载）时 full ctest 10 项中恰有 1 项（smoke 或 smoke-ps2）超时，单独复跑通过；与代码无关（本批 LAY-001 拆分前后均现），属 CI 时序敏感；非产品缺陷，记录在案
