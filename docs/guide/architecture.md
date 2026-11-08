@@ -28,7 +28,7 @@ Interrupt dispatch owns the IDT, PIC remapping, PIT, exceptions, and the dispatc
 
 ## Kernel-owned input/output
 
-Input must run in the identity-mapped kernel world, so IRQ1/IRQ4 and IRQ12 live here; they decode keyboard, serial, and mouse samples and send fixed messages to the tty service. Output reaches `SYS_WRITE` and `SYS_CLEAR`, whose kernel side writes VGA and COM1. The exception is deliberate: boot-owned input hardware is the only hardware kept in the kernel. State is the console cursor, UART configuration, a one-slot held keystroke, mouse packet state and cursor save cell. Protocol names live in the tty header; user-facing output copy is emitted by kernel code or the calling application.
+This layer is the platform console — console hardware policy (`kernel/char.c`, `kernel/mouse.c`, `kernel/vga.c`) that is deliberately not one of the five kernel mechanisms. Input must run in the identity-mapped kernel world, so IRQ1/IRQ4 and IRQ12 live here; they decode keyboard, serial, and mouse samples and send fixed messages to the tty service. Output reaches `SYS_WRITE` and `SYS_CLEAR`, whose kernel side writes VGA and COM1. The exception is deliberate: boot-owned input hardware is the only hardware kept in the kernel. State is the console cursor, UART configuration, a one-slot held keystroke, mouse packet state and cursor save cell. Protocol names live in the tty header; user-facing output copy is emitted by kernel code or the calling application.
 
 **Files:** `kernel/char.h`, `kernel/char.c`, `kernel/mouse.h`, `kernel/mouse.c`, `kernel/vga.h`, `kernel/vga.c`, `servers/tty/tty.h`.
 

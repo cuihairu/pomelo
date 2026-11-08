@@ -71,15 +71,19 @@ lives outside it so that a disk bug has to get through IPC before it can hurt
 anyone. And a crashed service comes back the way it was born: `spawn` asks by
 name, the kernel rebuilds it in its old seat — same task id, same senders
 still addressing it. The one piece of hardware the kernel does own is the
-console: the keyboard, mouse and serial interrupts land in `kernel/char.c`
-and `kernel/mouse.c`, which turn each keystroke and each motion sample into
-a message for the tty service — output is one syscall away.
+console — its own category, not one of the five mechanisms. `kernel/char.c`,
+`kernel/mouse.c` and `kernel/vga.c` are the platform-console policy: the
+keyboard, mouse and serial interrupts land there because handlers must run
+in the one address space every cr3 maps, and they turn each keystroke and
+each motion sample into a message for the tty service — output is one
+syscall away.
 
 ```
 boot/       From power-on to the first line of C: multiboot, GDT, IDT, PIT.
-kernel/     The microkernel: interrupts, scheduling, IPC, syscalls, paging,
-            plus the console hardware (char.c, mouse.c) that feeds the tty
-            service.
+kernel/     The microkernel: the five mechanisms — interrupts, scheduling,
+            IPC, syscalls, paging. Console hardware is its own category
+            here, not one of the five: char.c, mouse.c and vga.c feed the
+            tty service and render the screen.
 servers/fs/ A file server and its tiny on-disk format (superblock + inodes).
 servers/tty/ A terminal server: kernel-delivered chars to a line buffer.
 servers/net/ An e1000 driver, a minimal arp/ip/udp/tcp stack and a socket

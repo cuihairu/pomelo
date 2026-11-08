@@ -28,7 +28,7 @@
 
 ## 内核专属输入输出
 
-输入必须在恒等映射的内核世界运行,因此 IRQ1/IRQ4 与 IRQ12 位于这里;它们解码键盘、串口与鼠标样本,并以定长消息发送给 tty 服务。输出通过 `SYS_WRITE` 和 `SYS_CLEAR` 进入,内核侧写 VGA 和 COM1。这是刻意例外:启动期持有的输入硬件是唯一留在内核里的硬件。状态包括控制台光标、UART 配置、一个按键保留槽、鼠标包状态与光标保存单元。协议名在 tty 头文件;用户可见文案由内核代码或调用应用发出。
+这一层就是平台控制台(platform console):控制台硬件策略(`kernel/char.c`、`kernel/mouse.c`、`kernel/vga.c`),刻意不算五个内核机制之一。输入必须在恒等映射的内核世界运行,因此 IRQ1/IRQ4 与 IRQ12 位于这里;它们解码键盘、串口与鼠标样本,并以定长消息发送给 tty 服务。输出通过 `SYS_WRITE` 和 `SYS_CLEAR` 进入,内核侧写 VGA 和 COM1。这是刻意例外:启动期持有的输入硬件是唯一留在内核里的硬件。状态包括控制台光标、UART 配置、一个按键保留槽、鼠标包状态与光标保存单元。协议名在 tty 头文件;用户可见文案由内核代码或调用应用发出。
 
 **文件:** `kernel/char.h`, `kernel/char.c`, `kernel/mouse.h`, `kernel/mouse.c`, `kernel/vga.h`, `kernel/vga.c`, `servers/tty/tty.h`。
 

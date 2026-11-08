@@ -61,14 +61,17 @@ qemu-system-i386 -M pc -kernel build/kernel -hda build/pomelo.img
 办事只能发消息。内核不解析磁盘格式;文件系统放在内核外面,磁盘上的 bug
 想伤到内核,得先挤过那扇 IPC 的门。崩掉的服务也按出生的方式回来:shell 敲
 `spawn` 按名字请一遍,内核把它建回老座位——任务号不变,发往它的消息照走。
-内核唯一拥有的硬件是控制台:键盘、鼠标和
-串口的中断落在 `kernel/char.c` 与 `kernel/mouse.c`,由它们把每次击键、每份
-鼠标样本变成一条消息投给 tty 服务;输出则反过来,一个系统调用就够。
+内核唯一拥有的硬件是控制台——它自成一分类,不算五个机制之一。
+`kernel/char.c`、`kernel/mouse.c` 与 `kernel/vga.c` 是平台控制台策略:键盘、
+鼠标和串口的中断落在这里——处理函数必须跑在每个 cr3 都映射的那一个地址
+空间——由它们把每次击键、每份鼠标样本变成一条消息投给 tty 服务;输出则
+反过来,一个系统调用就够。
 
 ```
 boot/       从上电到第一行 C:multiboot、GDT、IDT、PIT。
-kernel/     微内核本体:中断、调度、IPC、系统调用、分页,外加喂 tty 的控制台
-            硬件(char.c, mouse.c)。
+kernel/     微内核本体:五个机制——中断、调度、IPC、系统调用、分页。控制台
+            硬件在这里自成一分类,不算五个机制:char.c、mouse.c、vga.c 喂
+            tty 服务并渲染屏幕。
 servers/fs/ 文件服务,以及它那套极简磁盘格式(超级块 + inode)。
 servers/tty/ 终端服务:内核送来的字符攒成行。
 servers/net/ e1000 驱动 + 最小 arp/ip/udp/tcp 栈 + socket 表,同住一个
