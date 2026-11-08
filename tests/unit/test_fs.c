@@ -1,12 +1,20 @@
 /* unit-fs: exercise the IPC hardening in the real fs write path.
- * We include the production source (not a copy) and link against the
- * host 32-bit libc now that gcc-multilib is present, so the guards
- * under test are the very ones the service runs. */
+ * fsrw.c is compiled as its own translation unit and linked in, so the
+ * guards under test are the very ones the service runs. This file only
+ * provides the boundary fs.h declares: the table state and the disk
+ * and reply helpers, inert on the host. */
 
 #include <stdio.h>
 #include <string.h>
 
-#include "servers/fs/fsrw.c"
+#include "servers/fs/fs.h"
+
+/* fsrw.c: the request handlers under test, declared the same way fs.c
+ * (their only other client) declares them. */
+void do_read(struct msg *m);
+void do_create(struct msg *m);
+void do_write(struct msg *m);
+void do_commit(struct msg *m);
 
 /* Stand-ins for the service's kernel-facing helpers. */
 struct superblock sb;
