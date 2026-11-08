@@ -54,7 +54,7 @@
 - 目录/分类问题：
   - [ ] `kernel/char.c`、`kernel/mouse.c` 和 `kernel/vga.c` 是控制台硬件策略，不是五内核机制；应归入独立的 platform-console 分类并在 README Layout 中区分（kernel/char.c:7-14）
   - [ ] `tests/unit/test_fs.c` 和 `tests/unit/test_net.c` 通过源码包含把宿主测试耦合进生产文件，依赖 `__POMELO_HOST_UNIT__` 分支；更适合提取可测试边界的宿主 shim 或按目标产物测试（tests/unit/test_fs.c:1-12, tests/unit/test_net.c:1-12）
-  - [ ] `tools/docs-chapters.sh` 的 `build/docs-baseline` 相对当前工作目录，从仓库根以外执行会改变基线路径；docs 脚本应固定仓库根（tools/docs-chapters.sh:20-28）
+  - [x] `tools/docs-chapters.sh` 的 `build/docs-baseline` 相对当前工作目录，从仓库根以外执行会改变基线路径；docs 脚本应固定仓库根（tools/docs-chapters.sh:20-28）— 已修 2376f6c（脚本开头 `cd "$(dirname "$0")/.."` 固定仓库根；save 回显页数改为 find 实际计数并去掉注释写死的 34）；从 /tmp 执行 `tools/docs-chapters.sh check` 实测命中仓库基线：checked 38 baseline pages against 38 built pages、no regression、exit 0（基线先经 save 刷新：架构/术语表 2 页入基线后 34→38）
 - 架构目录解说与术语表（en/zh 同步）— docs/guide/architecture.md、docs/guide/glossary.md、docs/zh/guide/architecture.md、docs/zh/guide/glossary.md
 - [x] 审核发现：net TCP SEND 越界读 m->data 未闭合——新护栏把 unacked_len 夹到 SOCKBUF=512，但 m->data 仅 MSG_DATA=56 字节（struct msg 末字段，net_main 栈上局部量），恶意客户端 arg1∈(57,512] 时 memcpy 从 m->data 越界读 ≤456 字节并以 TCP 载荷发出；应夹到 MSG_DATA（同函数 UDP 分支 952-953 已如此），而非 SOCKBUF（servers/net/net.c:967-969）— 已修 ea2807c（net_clamp_send_len 夹到 MSG_DATA），ctest 7/7
 - [x] 审核发现：mkfs next_block 守卫不足——`next_block>=NDATA` 仅在文件边界检查，单个文件（≤MAXFILE=3072=6 块）可在块循环内把 next_block 推过 NDATA，put_sector(DATA_START+next_block) 越过 disk[] 上界写（disk 仅容 lba≤DATA_START+NDATA-1=1028）；守卫应置于块循环内 put_sector 之前（tools/mkfs/mkfs.c:56-59,82-84）— 已修 934f761（块循环内 put_sector 前拦截，镜像满截短并停止种子），ctest 7/7
