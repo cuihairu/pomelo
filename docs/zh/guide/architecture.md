@@ -36,7 +36,7 @@
 
 fs 服务持有 ATA PIO 和三区磁盘格式,启动时载入超级块与 inode 表,应答 shell 文件请求,并在缺盘或坏 magic 时降级为明确拒绝。tty 服务持有行规程和未认领的完成行。net 服务持有 PCI/e1000/MMIO/DMA、ARP、IP、ICMP、UDP、极简 TCP 和四项 socket 表。三者都运行在 ring 3,只通过 `SYS_SEND`/`SYS_RECV` 通信。服务协议 schema 是头文件(`servers/fs/fs.h`, `servers/tty/tty.h`, `servers/net/net.h`);磁盘 schema 是 `servers/fs/format.h`。运行期网络参数是编译期 SLIRP 约定,而非配置文件。
 
-**文件:** `servers/fs/format.h`, `servers/fs/fs.h`, `servers/fs/fs.c`, `servers/fs/fsrw.c`, `servers/fs/ata.c`;`servers/tty/tty.h`, `servers/tty/tty.c`;`servers/net/net.h`, `servers/net/net.c`。
+**文件:** `servers/fs/format.h`, `servers/fs/fs.h`, `servers/fs/fs.c`, `servers/fs/fsrw.c`, `servers/fs/ata.c`;`servers/tty/tty.h`, `servers/tty/tty.c`;`servers/net/net.h`, `servers/net/net.c`, `servers/net/nic.c`, `servers/net/arp.c`, `servers/net/ip.c`, `servers/net/sock.c`。
 
 ## 应用
 
@@ -65,7 +65,7 @@ smoke 与 walkthrough 脚本启动 QEMU,驱动串口、PS/2、鼠标、网络、
 5. **IPC 是独立机制,不嵌进调度器。** 调度器只知道座位是否 ready,IPC 持有定长消息形状、容量、复制、阻塞和唤醒;分离后所有服务协议都能复用同一传输(`kernel/ipc/ipc.c:13-63`, `kernel/sched/sched.h:38-48`)。
 6. **控制台输入归内核,控制台状态归服务。** 键盘和串口 ISR 必须存在于恒等映射内核世界,但退格、回显和完成行缓冲是终端策略,因此属于 tty(`kernel/char.c:7-14`, `servers/tty/tty.c:10-15`)。
 7. **文件协议与磁盘格式区别于块 I/O。** `fs.h` 的消息 API、`format.h` 的盘上超级块/inode schema、`fs.c` 的服务分发、`ata.c` 的轮询 PIO 驱动各有变化速率和信任边界(`servers/fs/fs.h:8-27`, `servers/fs/format.h:6-48`, `servers/fs/ata.c:5-14`)。
-8. **网络传输与 socket 服务状态模型不同。** 以太网/IP/协议帧由流量驱动,socket 上下文承载挂起的应用请求、序列号、接收缓冲和重传状态;混在一起会让服务 API 依赖线缆帧格式(`servers/net/net.c:369-394`, `servers/net/net.c:437-470`)。
+8. **网络传输与 socket 服务状态模型不同。** 以太网/IP/协议帧由流量驱动,socket 上下文承载挂起的应用请求、序列号、接收缓冲和重传状态;混在一起会让服务 API 依赖线缆帧格式(`servers/net/ip.c:63-88`, `servers/net/sock.c:17-36`)。
 9. **应用保持薄客户端。** shell 明确只讲 tty 和 fs 协议,netsh 的运行期世界就是 net 服务回复;这把命令/UI 策略留在服务状态机之外(`apps/shell/shell.h:9-10`, `apps/netsh/netsh.c:163-174`)。
 10. **构建与运行期分层。** blob 管线和磁盘镜像只服务于引导与 smoke 前,内核/服务在其后承担行为;CMake blob 管线和 mkfs 是宿主工具,不是内核机制(`CMakeLists.txt:11-48`, `tools/mkfs/mkfs.c:1-4`)。
 11. **验证驱动外部契约。** smoke 测试调用实际 QEMU 命令面并检查协议可见结果,因此测的是配置与行为,而不是内部函数(`CMakeLists.txt:113-153`, `tools/smoke-net.sh:18-25`)。

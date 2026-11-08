@@ -1,11 +1,14 @@
 /* unit-net: exercise the IPC and frame hardening in the real net path.
- * Included production source, host -m32 build, so the guards are the
- * ones the service actually runs. */
+ * The service's modules are compiled in as-is (nic/arp/ip/sock/net),
+ * host -m32 build, so the guards under test are the ones the service
+ * actually runs. Only the boundary is inert: no card is probed and no
+ * syscall is entered, so the host run touches no hardware. */
 
 #include <stdio.h>
 #include <string.h>
 
-#include "servers/net/net.c"
+#include "servers/net/proto.h"
+#include "kernel/syscall/syscall.h"
 
 static int fails;
 #define CHECK(cond, msg) do { \

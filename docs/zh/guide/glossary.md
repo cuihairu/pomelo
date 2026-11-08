@@ -32,8 +32,8 @@
 | 零块分配 | Zero-block allocation | 教学 FS 的空闲空间约定:全零块视为空闲并懒分配;不支持删除。 | `servers/fs/format.h:15-17`, `servers/fs/fsrw.c:14-25` |
 | 轮询 PIO | Polled PIO | ATA 驱动的 programmed-I/O 读写路径,状态等待期间让出 CPU;刻意不用中断和 DMA。 | `servers/fs/ata.c:5-14`, `servers/fs/ata.c:30-35` |
 | Socket 协议 | Socket protocol | 十种 net 消息,把 `open`, `accept`, `recv`, `send`, `close` 操作映射到定长消息传输。 | `servers/net/net.h:15-32` |
-| Socket 上下文 | Socket context | 四项服务端记录之一,携带协议、地址对、TCP 状态、未确认段、接收缓冲和挂起调用者。 | `servers/net/net.c:437-470` |
-| 事件泵 | Event pump | net 服务的中断/消息等待循环:先清空请求,读取设备原因,再按来源分发帧或 timer tick,最后 EOI 所有权中断线。 | `servers/net/net.c:148-174`, `servers/net/net.c:1060-1077` |
+| Socket 上下文 | Socket context | 四项服务端记录之一,携带协议、地址对、TCP 状态、未确认段、接收缓冲和挂起调用者。 | `servers/net/sock.c:17-36` |
+| 事件泵 | Event pump | net 服务的中断/消息等待循环:先清空请求,读取设备原因,再按来源分发帧或 timer tick,最后 EOI 所有权中断线。 | `servers/net/nic.c:144-148`, `servers/net/net.c:83-95` |
 | 用户态驱动 | User-space driver | 运行在拥有它的 ring 3 任务中的 ATA/e1000 硬件代码,通过显式 IOPL、端口、MMIO 和所有权 IRQ 访问设备。 | `servers/net/net.h:6-11`, `boot/main.c:21-34` |
 | 隔离探针 | Isolation probe | 刻意触发缺页的任务,证明 ring 3 触碰内核内存只会杀死自己,内核与其他服务继续运行。 | `apps/probe/probe.c:6-11` |
 | 嵌入式用户镜像 | Embedded user image | 链接在 `0x40000000`、转换成扁平二进制并嵌入内核数据的 ring 3 程序;前四字节是入口点。 | `tools/user.ld:1-20`, `boot/main.c:11-19` |

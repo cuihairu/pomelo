@@ -30,7 +30,7 @@
 - 处置:**已修**。镜像 `cmd_cat:39` 的既有护栏 `if (n <= 0) break;`:`int w = fs_write(...); if (w <= 0) break; off += w;`。
 
 **3. TCP 重传 `snd_nxt` 膨胀 —— 重传路径永不确认,连接最终判死**
-- 证据:`servers/net/net.c:671-676`(修复前)
+- 证据:`servers/net/sock.c:259-264`(修复前)
   ```c
   static void sock_send_seg(struct sock *s) {
       u32 save = s->snd_nxt;               /* data flies from snd_una */
@@ -39,13 +39,13 @@
       s->snd_nxt = save + s->unacked_len;  /* BUG: 重传时 save 已含 una+len */
   }
   ```
-  首次发送 `save == snd_una`,`snd_nxt = snd_una + len` 正确;重传时 `save == snd_una + len`,`snd_nxt = snd_una + 2*len` —— 序列号被多推一个段长。对端 ACK `snd_una+len` 到,`net.c:793` `ack == s->snd_nxt` 永不成立 → 未确认段滞留 → 8 次重试(`TCP_RETX_LIMIT`)后 `net.c:849` "tcp gave up" 丢弃连接。任何一次 ACK 丢失/乱序即触发。
+  首次发送 `save == snd_una`,`snd_nxt = snd_una + len` 正确;重传时 `save == snd_una + len`,`snd_nxt = snd_una + 2*len` —— 序列号被多推一个段长。对端 ACK `snd_una+len` 到,`servers/net/sock.c:380` `ack == s->snd_nxt` 永不成立 → 未确认段滞留 → 8 次重试(`TCP_RETX_LIMIT`)后 `servers/net/sock.c:436` "tcp gave up" 丢弃连接。任何一次 ACK 丢失/乱序即触发。
 - 处置:**已修**。`s->snd_nxt = s->snd_una + s->unacked_len;`(固定于 `una+len`,与首发一致)。
 
 ### P2
 
 **4. IPC 长度参数未防负/超大 —— 恶意或出错任务可打穿 fs/net 服务**
-- 证据:`servers/fs/fsrw.c:66-69` `int len = m->arg2; if (len > MSG_DATA) len = MSG_DATA; if (len > tail) len = tail;` —— `len < 0` 通过两道上限,`memcpy(secbuf + off%SECTOR, m->data, len)`(:78)以负 `len` 转无符号 ≈ 4G 拷写;`reply(m, len, ...)`(:80)回负。`servers/net/net.c:959` `s->unacked_len = m->arg1 > SOCKBUF ? SOCKBUF : m->arg1;`(负 → 负,`:960` `memcpy` 崩)、`:946-947` UDP 发送长同型、`:927/:938` `sock_consume(s, m->arg1)` 负 `cap`。
+- 证据:`servers/fs/fsrw.c:66-69` `int len = m->arg2; if (len > MSG_DATA) len = MSG_DATA; if (len > tail) len = tail;` —— `len < 0` 通过两道上限,`memcpy(secbuf + off%SECTOR, m->data, len)`(:78)以负 `len` 转无符号 ≈ 4G 拷写;`reply(m, len, ...)`(:80)回负。`servers/net/sock.c:448`(修复前 `s->unacked_len = m->arg1 > SOCKBUF ? SOCKBUF : m->arg1;` 负 → 负,`memcpy` 崩)、`servers/net/sock.c:542-543` UDP 发送长同型、`servers/net/sock.c:217/:524` `sock_consume(s, m->arg1)` 负 `cap`。
 - 注:当前仓内应用(`netsh`/`shell`/`probe`)都传合法长度,非现役路径;属 IPC 信任边界的防御性缺口。**记 todo。**
 - 修法建议:各服务在解 `m->arg1/arg2` 后先 `if (len < 0) len = 0;`(或 refuse),再夹上限。
 
@@ -54,7 +54,7 @@
 - 处置:**记 todo**;修法:入口 `if ((u32)m->arg0 >= NINODES || !inodes[m->arg0].used) refuse(...)`。
 
 **6. ARP 包长度未校验**
-- 证据:`servers/net/net.c:993-994` `if (et == ETH_ARP) arp_in(f + 14);` —— 只拦 `len < 14`(:991),未查 ARP 帧长 ≥ 14+28;`arp_in`(:277)读 28 字节。runt 帧会读到该 2048 字节接收缓冲内的陈旧数据(不越缓冲,解析脏数据)。
+- 证据:`servers/net/net.c:28-34` `if (et == ETH_ARP) arp_in(f + 14);` —— 只拦 `len < 14`,未查 ARP 帧长 ≥ 14+28;`servers/net/arp.c:34` 读 28 字节。runt 帧会读到该 2048 字节接收缓冲内的陈旧数据(不越缓冲,解析脏数据)。
 - 处置:**记 todo**;修法:`if (et == ETH_ARP) { if (len < 14 + 28) return; arp_in(f + 14); }`。
 
 **7. `con_write` 负长度**

@@ -1,6 +1,6 @@
 # 16 · The network stack and socket service
 
-Corresponding code: `servers/net/net.c`, `apps/netsh/netsh.c`
+Corresponding code: `servers/net/` (net.c, nic.c, arp.c, ip.c, sock.c), `apps/netsh/netsh.c`
 
 ## The NIC driver lives in user mode
 
@@ -12,7 +12,7 @@ Both directions are descriptor rings: a string of fixed-length "envelopes", each
 
 ## Four layers, one function per layer
 
-In net.c the protocol stack is nothing but a call chain: `net_rx` reads the Ethernet type number, ARP packets go to `arp_in`, IP packets to `ip_in`; `ip_in` reads the protocol number, ICMP echo requests are answered on the spot, UDP and TCP packets find a socket by destination port and are handed to `sock_in_udp` / `sock_in_tcp`. ARP asks the gateway's MAC first; ICMP trades one round trip with the gateway — each of these two things happens once at boot, there are words on the serial port, there are frames in pcap, trustworthy and checkable.
+Across the service files the protocol stack is nothing but a call chain: `net_rx` (net.c) reads the Ethernet type number, ARP packets go to `arp_in` (arp.c), IP packets to `ip_in` (ip.c); `ip_in` reads the protocol number, ICMP echo requests are answered on the spot, UDP and TCP packets find a socket by destination port and are handed to `sock_in_udp` / `sock_in_tcp` (sock.c). ARP asks the gateway's MAC first; ICMP trades one round trip with the gateway — each of these two things happens once at boot, there are words on the serial port, there are frames in pcap, trustworthy and checkable.
 
 The checksum deserves a mention of its own. The checksums of both UDP and TCP cover a "pseudo-header" — source and destination IP, protocol number and length pieced together in front of the data and computed in one pass (rfc 768 / 793). The two protocols share one single `pseudo_cksum`; the only difference is the protocol number parameter. This parameter was hard-coded to UDP at the start, and the result was that every TCP segment got silently dropped by the peer — the host never answers, and pcap shows nothing but retransmitted SYNs. The lesson is recorded here: **two protocols looking alike does not mean one constant can serve both of them.**
 
@@ -71,7 +71,11 @@ printf 'ping udp\n'  | nc -u -w2 127.0.0.1 2325
 ## Files in this chapter
 
 ```
-servers/net/net.c   e1000 driver, ARP/IP/ICMP/UDP, the minimal TCP, the socket table and message replies
+servers/net/net.c   the ring 3 service: identity, frame dispatch and the main loop
+servers/net/nic.c   the e1000 driver and the console helpers
+servers/net/arp.c   address resolution: the gateway's cache entry, answers to who-has-us
+servers/net/ip.c    the datagram envelope: checksum, ip send and receive, icmp
+servers/net/sock.c  the socket table, the minimal TCP, and the message replies
 servers/net/net.h   the message protocol, e1000 registers, Ethernet and ip constants
 apps/netsh/netsh.c   the event loop: two echoes + one outbound greeting
 kernel/string.c/.h  memmove: compacting the socket receive buffer

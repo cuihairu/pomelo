@@ -44,7 +44,8 @@ pomelo_user(uprobe apps/probe/probe.c kernel/string.c)
 pomelo_user(ufs  servers/fs/fs.c servers/fs/fsrw.c servers/fs/ata.c
     kernel/string.c)
 pomelo_user(utty servers/tty/tty.c kernel/string.c)
-pomelo_user(unet servers/net/net.c kernel/string.c)
+pomelo_user(unet servers/net/net.c servers/net/nic.c servers/net/arp.c
+    servers/net/ip.c servers/net/sock.c kernel/string.c)
 pomelo_user(unetsh apps/netsh/netsh.c kernel/string.c)
 
 # ---------------------------------------------------------------------------
@@ -170,7 +171,9 @@ if(POMELO_CAN_LINK_M32)
     target_include_directories(unit-fs PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-fs COMMAND unit-fs)
 
-    add_executable(unit-net tests/unit/test_net.c)
+    add_executable(unit-net tests/unit/test_net.c
+        servers/net/net.c servers/net/nic.c servers/net/arp.c
+        servers/net/ip.c servers/net/sock.c)
     target_compile_options(unit-net PRIVATE -m32 -O0 -g -Wall -Wextra)
     target_link_options(unit-net PRIVATE -m32)
     target_compile_definitions(unit-net PRIVATE __POMELO_HOST_UNIT__)

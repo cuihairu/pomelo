@@ -1,6 +1,6 @@
 # 16 · 网络栈与 socket 服务
 
-对应代码:`servers/net/net.c`、`apps/netsh/netsh.c`
+对应代码:`servers/net/`(net.c、nic.c、arp.c、ip.c、sock.c)、`apps/netsh/netsh.c`
 
 ## 网卡驱动住在用户态
 
@@ -23,9 +23,10 @@ MMIO 是新面孔。设备寄存器映在物理地址上,任务先 `SYS_MMIO` �
 
 ## 四层,每层一个函数
 
-net.c 里协议栈就是一条调用链:`net_rx` 认以太网类型号,ARP 的包给
-`arp_in`,IP 的给 `ip_in`;`ip_in` 认协议号,ICMP 回显请求就地应答,
-UDP 和 TCP 的包按目的端口找 socket,交给 `sock_in_udp` / `sock_in_tcp`。
+服务各文件合起来,协议栈就是一条调用链:`net_rx`(net.c)认以太网类型号,
+ARP 的包给 `arp_in`(arp.c),IP 的给 `ip_in`(ip.c);`ip_in` 认协议号,
+ICMP 回显请求就地应答,UDP 和 TCP 的包按目的端口找 socket,
+交给 `sock_in_udp` / `sock_in_tcp`(sock.c)。
 ARP 先问网关的 MAC,ICMP 跟网关打一个来回,这两件事在启动时各做一次,
 串口上有字,pcap 里有帧,可信可查。
 
@@ -120,7 +121,11 @@ closed`。空手也能试:不给 2324 放监听者,问候的连接重试八次�
 ## 本章文件
 
 ```
-servers/net/net.c   e1000 驱动、ARP/IP/ICMP/UDP、最小 TCP、socket 表与消息应答
+servers/net/net.c   ring 3 服务本体:身份、帧分发与主循环
+servers/net/nic.c   e1000 驱动与控制台辅助
+servers/net/arp.c   地址解析:网关缓存项、回应 who-has-us
+servers/net/ip.c    数据报封装:校验和、ip 收发、icmp
+servers/net/sock.c  socket 表、极简 TCP 与消息应答
 servers/net/net.h   消息协议、e1000 寄存器、以太网与 ip 常量
 apps/netsh/netsh.c  事件循环:双回显 + 出站问候
 kernel/string.c/.h  memmove:socket 接收缓冲的压实
