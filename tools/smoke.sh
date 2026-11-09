@@ -32,8 +32,14 @@ exec 3<>"$fifo"
 
 # Unanchored count: a slow boot interleaves the net banner with the prompt
 # ("net: e1000 up, mac pomelo> "), and the prompt is what proves the shell
-# is idle, glued or not.
-prompts() { grep -c 'pomelo> ' "$out" 2>/dev/null || echo 0; }
+# is idle, glued or not. The fallback overwrites the count instead of
+# appending an echo: grep -c already prints 0 on no match, and a second
+# 0 would leave "0\n0" in the substitution -- an illegal number that
+# aborts the arithmetic in send().
+prompts() {
+    count=$(grep -c 'pomelo> ' "$out" 2>/dev/null) || count=0
+    echo "$count"
+}
 
 # wait until the transcript shows at least $1 prompts, or 30s pass
 wait_prompt() {
