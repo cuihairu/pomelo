@@ -28,7 +28,7 @@ trap '' PIPE                          # a dead qemu must not kill the driver
 : > "$out"                            # the transcript exists before qemu starts
 rm -f "$fifo"
 mkfifo "$fifo"
-timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
+timeout 90 "$qemu" -kernel "$kernel" -hda "$img" \
     -nographic -no-reboot "$@" \
     -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0 \
     -object filter-dump,id=f0,netdev=n0,file="$pcap" \
@@ -41,16 +41,19 @@ qpid=$!
 exec 3<>"$fifo"
 
 # One deadline for the whole battery, matching the qemu timeout: if the
-# shell never speaks (or qemu dies), give up at ~25s instead of spinning
+# shell never speaks (or qemu dies), give up at ~90s instead of spinning
 # per command.  A prompt count that greps an unreadable/absent transcript
 # reads as 0 -- never a fail-open that writes before the shell is up.
+# The count is unanchored: a slow boot interleaves the net banner with the
+# prompt ("net: e1000 up, mac pomelo> "), and a line-anchored grep would
+# miss it and stall the whole battery.
 want=0
-deadline=$(( $(date +%s) + 25 ))
+deadline=$(( $(date +%s) + 90 ))
 send() {
     want=$((want + 1))
     count=0
     while [ "$(date +%s)" -lt "$deadline" ]; do
-        count=$(grep -c '^pomelo> ' "$out" 2>/dev/null) || count=0
+        count=$(grep -c 'pomelo> ' "$out" 2>/dev/null) || count=0
         [ "$count" -ge "$want" ] && break
         sleep 0.25
     done
@@ -72,6 +75,7 @@ send 'cat walk.txt'
 send 'mem'
 
 exec 3>&-
+kill "$qpid" 2>/dev/null      # the battery is done; don't idle to the timeout
 wait "$qpid" 2>/dev/null
 rm -f "$fifo"
 
