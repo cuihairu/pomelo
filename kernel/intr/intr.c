@@ -18,6 +18,7 @@ static void task_fault(struct regs *r, const char *what, u32 addr) {
         panic(what, r);
     intr_disable();
     kprintf("task %d killed: %s at %x (eip=%x)\n", cur, what, addr, r->eip);
+    task_free_frames(cur);         /* its pages die with it: no leaks */
     tasks[cur].state = ST_FREE;
     sched_next();
 }

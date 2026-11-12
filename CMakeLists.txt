@@ -223,6 +223,16 @@ if(POMELO_CAN_LINK_M32)
     target_link_options(unit-spawn-cap PRIVATE -m32)
     target_include_directories(unit-spawn-cap PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-spawn-cap COMMAND unit-spawn-cap)
+
+    # unit-pdir-free: the task-death teardown is a production function
+    # (paging.c), so the test links that TU and supplies its own
+    # frame_free to record what the walk returns.
+    add_executable(unit-pdir-free tests/unit/test_pdir_free.c
+        kernel/mm/paging.c kernel/string.c)
+    target_compile_options(unit-pdir-free PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-pdir-free PRIVATE -m32)
+    target_include_directories(unit-pdir-free PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-pdir-free COMMAND unit-pdir-free)
 else()
     message(STATUS "32-bit host libc (gcc-multilib) not found; "
         "skipping unit-fs/unit-net")

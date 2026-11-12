@@ -110,3 +110,39 @@ u32 pdir_user_new(u32 blob_pa, u32 bytes) {
     te[((USER_STACK_TOP - 4096) >> 12) & 0x3FF] = stf | PTE_P | PTE_RW | PTE_US;
     return dir;
 }
+
+/* Tear down one user world. The directory owns its user page tables, the
+ * image copy and the stack; walking it returns every bitmap frame. Two
+ * things are left alone: the shared kernel PDEs (0..NPT-1, the lo_pt
+ * tables every task borrows) and device mappings -- a PTE with pa >= SPAN
+ * came from mmio_map and names a card, not a frame, so only its page
+ * table (which is RAM) is freed, never the device page itself. */
+void pdir_free(u32 dir) {
+    if (!dir) return;
+    u32 *de = (u32 *)dir;                  /* pa == va below 16 MB */
+    for (u32 i = NPT; i < 1024; i++) {
+        u32 dep = de[i];
+        if (!(dep & PTE_P)) continue;
+        u32 pt_pa = dep & ~0xFFFu;
+        if (pt_pa >= SPAN) continue;       /* not a RAM page table */
+        u32 *te = (u32 *)pt_pa;
+        for (u32 j = 0; j < 1024; j++) {
+            u32 pte = te[j];
+            if (!(pte & PTE_P)) continue;
+            u32 pa = pte & ~0xFFFu;
+            if (pa < SPAN) frame_free(pa); /* image, stack, any nested table */
+        }
+        frame_free(pt_pa);
+    }
+    frame_free(dir);
+}
+
+/* A task's frames are its own, and they die with it. task_fault walks a
+ * task away without this, so a crash -- or a service restart, which is a
+ * crash on purpose -- would drain the 16 MB bitmap a few frames at a time
+ * until no spawn could ever succeed again. */
+void task_free_frames(int slot) {
+    if (slot < 0 || slot >= NTASK) return;
+    pdir_free(tasks[slot].pdir);
+    tasks[slot].pdir = 0;
+}

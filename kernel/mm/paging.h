@@ -41,5 +41,7 @@ u32  cr2_fault(void);                    /* faulting address, for the handler */
 u32  v2p(u32 va);                        /* one walk of the current task's map */
 u32  mmio_map(u32 pa);                   /* map one device page, return va */
 u32  pdir_user_new(u32 blob_pa, u32 bytes);  /* dir for a user image */
+void pdir_free(u32 dir);                 /* return every frame a dir owns */
+void task_free_frames(int slot);         /* free a dead task's whole world */
 
 #endif

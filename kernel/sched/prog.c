@@ -42,8 +42,10 @@ int sched_spawn(const char *name) {
 
     u32 dir = pdir_user_new((u32)p->begin, (u32)(p->end - p->begin));
     if (!dir) return -1;                /* out of frames */
-    if (task_start(slot, dir, *(const u32 *)p->begin, USER_STACK_TOP, p->flags) < 0)
+    if (task_start(slot, dir, *(const u32 *)p->begin, USER_STACK_TOP, p->flags) < 0) {
+        pdir_free(dir);                 /* the seat refused: give the frames back */
         return -1;
+    }
     tasks[slot].prog = p;
     return slot;
 }
