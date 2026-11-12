@@ -26,6 +26,17 @@ void cmd_spawn(int argc, char **argv);
 void cmd_uptime(int argc, char **argv);
 void cmd_mem(int argc, char **argv);
 
+/* cmd_spawn prints "<name> is task <n> now". The fixed suffix (space,
+ * "is task ", one digit, " now\n", the NUL) needs SPAWN_SUFFIX bytes, so a
+ * name from a tty line -- which may be long -- can use at most the rest of
+ * the line buffer. Bound the copy by this; the spawn itself only ever reads
+ * the first PROG_NAME bytes, but the shell holds the whole string. */
+#define SPAWN_SUFFIX 16
+static inline int spawn_name_cap(int buf) {
+    if (buf <= SPAWN_SUFFIX) return 0;   /* no room for name and suffix */
+    return buf - SPAWN_SUFFIX;
+}
+
 /* shell.c: tty client helpers */
 void tty_puts(const char *s);
 void tty_write(const char *s, int n);
