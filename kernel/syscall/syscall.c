@@ -98,7 +98,11 @@ void syscall_entry(struct regs *r) {
          * owns the line asks here. The stub is empty by design: waking
          * the waiter is irq.c's job, and the driver clears the device's
          * own interrupt state once it runs. Claiming the line is what
-         * moves its eoi from the kernel to the driver (sys_irq_eoi). */
+         * moves its eoi from the kernel to the driver (sys_irq_eoi).
+         * irq_no_ok first: irq.c indexes its tables by the line number,
+         * and a bogus one would shift past the mask (1u << 16+) and poke
+         * pic ports that belong to nobody. */
+        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
         irq_claim(r->ebx);
@@ -107,7 +111,11 @@ void syscall_entry(struct regs *r) {
     case SYS_IRQ_EOI:
         /* The other half of owning a line: the driver quieted its device,
          * now the pic may re-arm it. The kernel skipped the eoi on
-         * delivery exactly so this could happen in the right order. */
+         * delivery exactly so this could happen in the right order.
+         * The range check matters as much as it does above: pic_eoi would
+         * happily ack a line 16+ (or a slave ack for 8-15 that never fired)
+         * and strand in-service bits. */
+        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
         pic_eoi(r->ebx);
         r->eax = 0;
         return;

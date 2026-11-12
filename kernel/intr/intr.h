@@ -17,6 +17,13 @@ struct regs {
 #define IRQ_COM1  4   /* serial port receive */
 #define IRQ_MOUSE 12  /* PS/2 mouse, the 8042's aux channel */
 
+/* The irq gate: only the two 8259s' sixteen lines exist. irq.c indexes
+ * its handler/waiter tables by the line number, so anything past 15
+ * would shift the masks past the table and poke pic ports that belong
+ * to nobody. Pure, so the unit tests share the kernel's exact rule. */
+#define NIRQ 16
+static inline int irq_no_ok(u32 irq) { return irq < NIRQ; }
+
 void idt_init(void);
 void pic_remap(void);
 void pic_eoi(u32 irq);

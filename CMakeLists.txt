@@ -191,6 +191,15 @@ if(POMELO_CAN_LINK_M32)
     target_link_options(unit-net PRIVATE -m32)
     target_include_directories(unit-net PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-net COMMAND unit-net)
+
+    # unit-irq-guard: the syscall-boundary gates are header inlines, so
+    # each test needs no production TU -- it checks the predicate the
+    # kernel runs, exactly as written.
+    add_executable(unit-irq-guard tests/unit/test_irq_guard.c)
+    target_compile_options(unit-irq-guard PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-irq-guard PRIVATE -m32)
+    target_include_directories(unit-irq-guard PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-irq-guard COMMAND unit-irq-guard)
 else()
     message(STATUS "32-bit host libc (gcc-multilib) not found; "
         "skipping unit-fs/unit-net")
