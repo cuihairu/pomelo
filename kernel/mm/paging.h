@@ -15,6 +15,12 @@
 #define SPAN  (16u << 20)
 #define NPT   (SPAN >> 22)               /* 4 page tables cover the span */
 
+/* The mmio gate: pa below the span is physical RAM -- the identity-mapped
+ * kernel world itself -- and never crosses into a task's space; only
+ * device memory above it may. Pure, so the unit tests share the kernel's
+ * exact rule. */
+static inline int mmio_pa_ok(u32 pa) { return pa >= SPAN; }
+
 /* One user world: code and data land at USER_BASE, the stack hangs just
  * under USER_STACK_TOP. Two user tasks may share these addresses while
  * mapping different frames -- that is the isolation, after all. */

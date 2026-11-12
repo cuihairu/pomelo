@@ -200,6 +200,12 @@ if(POMELO_CAN_LINK_M32)
     target_link_options(unit-irq-guard PRIVATE -m32)
     target_include_directories(unit-irq-guard PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-irq-guard COMMAND unit-irq-guard)
+
+    add_executable(unit-mmio-guard tests/unit/test_mmio_guard.c)
+    target_compile_options(unit-mmio-guard PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-mmio-guard PRIVATE -m32)
+    target_include_directories(unit-mmio-guard PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-mmio-guard COMMAND unit-mmio-guard)
 else()
     message(STATUS "32-bit host libc (gcc-multilib) not found; "
         "skipping unit-fs/unit-net")

@@ -53,8 +53,15 @@ u32 v2p(u32 va) {
  * page number picks the slot in the MMIO window, so the same page always
  * lands at the same address and remapping is idempotent. (Real hardware
  * would also want the mapping uncacheable; this machine runs without a
- * cache, which is one cheat the emulator lets us keep.) */
+ * cache, which is one cheat the emulator lets us keep.)
+ *
+ * pa < SPAN is RAM, not device memory: below that line lies the whole
+ * identity-mapped kernel world -- its code, data and every page table --
+ * and mapping it into the caller would hand ring 3 the keys (the probe's
+ * "touch kernel memory and die" would pass if it mapped the page first).
+ * Only device memory above the span may cross. */
 u32 mmio_map(u32 pa) {
+    if (!mmio_pa_ok(pa)) return 0;
     u32 va = MMIO_BASE + ((pa >> 12) & 0x3FF) * 4096;
     u32 *de = (u32 *)tasks[cur].pdir;
     if (!(de[va >> 22] & PTE_P)) {
