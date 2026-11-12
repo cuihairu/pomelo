@@ -16,6 +16,10 @@ static void (*handlers[16])(void);
 static u16 waiters[16];     /* per line: the seats asleep on it */
 static u16 pending;
 static u16 claimed;
+static int claimed_by[16] = {   /* which seat claims the line; -1 = none */
+    -1, -1, -1, -1, -1, -1, -1, -1,
+    -1, -1, -1, -1, -1, -1, -1, -1,
+};
 
 void irq_install(u32 irq, void (*fn)(void)) {
     handlers[irq] = fn;
@@ -39,9 +43,31 @@ int irq_owned(u32 irq) {
 }
 
 /* The claim act: a ring 3 driver opens its line through sys_irq_enable,
- * and from then on it -- not the kernel -- owns the line's eoi. */
+ * and from then on it -- not the kernel -- owns the line's eoi. The seat
+ * is remembered so a crash can give the line back (irq_release). */
 void irq_claim(u32 irq) {
     claimed |= 1u << irq;
+    claimed_by[irq] = cur;
+}
+
+/* A driver that dies takes its hardware with it -- or would: the stub it
+ * installed sits in handlers[], the claimed bit keeps the kernel from
+ * ever eoi-ing the line, and a device left asserting stays stuck
+ * in-service forever. Walk the claimed lines back to the kernel: drop the
+ * handler, unclaim, re-mask (the device may still be asserting) and ack
+ * the exact line so a stuck in-service bit does not strangle the next
+ * driver that claims it. A line another live seat owns is not touched. */
+void irq_release(int tid) {
+    for (u32 irq = 0; irq < NIRQ; irq++) {
+        if (claimed_by[irq] != tid) continue;
+        handlers[irq] = 0;
+        claimed &= ~(1u << irq);
+        claimed_by[irq] = -1;
+        waiters[irq] &= ~(1u << tid);
+        pending &= ~(1u << irq);
+        pic_irq_disable(irq);
+        pic_eoi_specific(irq);
+    }
 }
 
 /* Called from interrupt context: wake everyone asleep on the line, or,

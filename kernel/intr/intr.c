@@ -19,6 +19,7 @@ static void task_fault(struct regs *r, const char *what, u32 addr) {
     intr_disable();
     kprintf("task %d killed: %s at %x (eip=%x)\n", cur, what, addr, r->eip);
     task_free_frames(cur);         /* its pages die with it: no leaks */
+    irq_release(cur);              /* its hardware lines go back too */
     tasks[cur].state = ST_FREE;
     sched_next();
 }
@@ -55,6 +56,30 @@ void pic_irq_enable(u32 irq) {
         outb(0x21, inb(0x21) & (u8)~(1u << irq));
     else
         outb(0xA1, inb(0xA1) & (u8)~(1u << (irq - 8)));
+}
+
+/* The other half: a dead driver's device may still assert its line, so
+ * the release re-masks it rather than leaving the machine to a storm the
+ * no one will ever quiet. The next claim opens the line again. */
+void pic_irq_disable(u32 irq) {
+    if (irq < 8)
+        outb(0x21, inb(0x21) | (u8)(1u << irq));
+    else
+        outb(0xA1, inb(0xA1) | (u8)(1u << (irq - 8)));
+}
+
+/* Clear exactly one line's in-service bit. The non-specific eoi a driver
+ * sends (0x20) clears the highest-priority in-service line, which after a
+ * crash may not be the line being released -- a specific eoi names the
+ * level, and clears nothing but it. A slave line also needs the cascade
+ * (IRQ2) bit on the master, which forwarded it. */
+void pic_eoi_specific(u32 irq) {
+    if (irq < 8) {
+        outb(0x20, 0x60 | (u8)irq);
+    } else {
+        outb(0xA0, 0x60 | (u8)(irq - 8));
+        outb(0x20, 0x60 | 2u);        /* the cascade line that forwarded it */
+    }
 }
 
 /* --- PIT: the timer tick that drives preemption ----------------------- */
