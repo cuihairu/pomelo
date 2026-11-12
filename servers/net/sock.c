@@ -1,6 +1,7 @@
 #include "../../kernel/string.h"
 #include "../../kernel/syscall/syscall.h"
 #include "proto.h"
+#include "sock.h"
 
 /* The sockets. The one change between the stack below and the app
  * above: nothing in this task answers traffic for itself anymore. A
@@ -10,30 +11,6 @@
  * the caller sleeps in a message, arriving traffic answers it. No
  * timeouts on accept and recv, so a peer that stalls parks its caller
  * with it; the gap is named, not hidden. */
-
-#define SOCK_CAPS 4
-#define SOCKBUF  512
-
-struct sock {
-    int  used;
-    int  proto;                     /* IP_PROTO_TCP or IP_PROTO_UDP */
-    u8   rip[4];                    /* the peer: learned on accept, given on open */
-    u16  lport, rport;
-    int  state;                     /* TS_* */
-    u32  rcv_nxt;                   /* the next byte we expect */
-    u32  iss, snd_nxt, snd_una;     /* our side: init, next, oldest unacked */
-    u8   unacked[SOCKBUF];          /* one segment out, parked for its ack */
-    int  unacked_len;
-    int  retx_ticks, retx_count;
-    int  close_wait;                /* close asked, our data not acked yet */
-    int  fin_seen;                  /* the peer has ended its side */
-    u8   rbuf[SOCKBUF];             /* arrived bytes, waiting for a reader */
-    int  rbuf_len, rbuf_off;
-    struct msg pending;             /* the parked open, accept or recv */
-    int  pending_kind;              /* which reply that caller expects */
-    int  pending_cap;
-    int  have_pending;
-};
 
 static struct sock socks[SOCK_CAPS];
 static u16  eph_port;               /* local ports for active opens */
@@ -106,7 +83,7 @@ static void udp_tx(const u8 dst[4], u16 dport, u16 sport,
     ip_tx(dst, IP_PROTO_UDP, d, 8 + len);
 }
 
-static struct sock *sock_alloc(void) {
+struct sock *sock_alloc(void) {
     for (int i = 0; i < SOCK_CAPS; i++) {
         if (socks[i].used) continue;
         memset(&socks[i], 0, sizeof socks[i]);
@@ -159,18 +136,6 @@ static void reply_send(const struct msg *req, const struct sock *s, int n) {
     r.arg0 = n;
     r.arg2 = sock_id(s);
     sys_send_wait(req->src, &r);
-}
-
-/* A reader that asked before the bytes landed hears the end: nothing
- * left, and the peer has said goodbye. */
-static void say_eof(const struct sock *s) {
-    struct msg r;
-    memset(&r, 0, sizeof r);
-    r.type = MSG_NET_REPLY_RECV;
-    r.arg0 = 0;
-    r.arg1 = -1;
-    r.arg2 = sock_id(s);
-    sys_send_wait(s->pending.src, &r);
 }
 
 /* Every parked caller gets exactly one answer, then the seat is free.
@@ -392,7 +357,7 @@ void sock_in_tcp(struct sock *s, const u8 *t, int len, const u8 src[4]) {
                 if (!s->rbuf_len && s->have_pending &&
                     s->pending_kind == MSG_NET_REPLY_RECV) {
                     s->have_pending = 0;
-                    say_eof(s);
+                    sock_eof_reply(s->pending.src, sock_id(s));
                 }
             }
             /* our own fin waits for a clear line -- sock_close or the
@@ -525,7 +490,7 @@ void sock_api(struct msg *m) {
             return;
         }
         if (s->fin_seen) {               /* drained and done: the end */
-            say_eof(s);
+            sock_eof_reply(m->src, sock_id(s));
             return;
         }
         if (s->have_pending) {

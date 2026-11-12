@@ -2,6 +2,7 @@
 #define POMELO_NET_PROTO_H
 
 #include "net.h"
+#include "sock.h"
 
 /* The seams between the net service's modules. net.h is the contract
  * with apps; this header is private to the .c files in this directory.
@@ -11,7 +12,6 @@
  * used to spell as forward declarations. */
 
 struct msg;
-struct sock;
 
 /* Identity: the wire addresses this task answers for (net.c), plus the
  * hardware addresses learned along the way. */
@@ -47,6 +47,8 @@ void ip_ping_gw(void);
 int  ip_ping_ok(void);
 
 /* sock.c */
+struct sock *sock_alloc(void);         /* a free seat, zeroed and marked */
+void sock_eof_reply(int dst, int sid); /* the peer is gone: tell the reader */
 struct sock *sock_by_port(u8 proto, u16 dport);
 void sock_in_udp(struct sock *s, const u8 *u, int len, const u8 src[4]);
 void sock_in_tcp(struct sock *s, const u8 *t, int len, const u8 src[4]);

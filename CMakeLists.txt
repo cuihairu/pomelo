@@ -45,7 +45,8 @@ pomelo_user(ufs  servers/fs/fs.c servers/fs/fsrw.c servers/fs/ata.c
     kernel/string.c)
 pomelo_user(utty servers/tty/tty.c kernel/string.c)
 pomelo_user(unet servers/net/net.c servers/net/nic.c servers/net/arp.c
-    servers/net/ip.c servers/net/sock.c kernel/string.c)
+    servers/net/ip.c servers/net/sock.c servers/net/sock_reply.c
+    kernel/string.c)
 pomelo_user(unetsh apps/netsh/netsh.c kernel/string.c)
 
 # ---------------------------------------------------------------------------

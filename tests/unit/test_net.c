@@ -16,6 +16,15 @@ static int fails;
     else { printf("FAIL: %s\n", msg); fails++; } \
 } while (0)
 
+/* The service's replies leave through sock_eof_reply, which the real
+ * service links from sock_reply.c. The test does not link that file;
+ * it supplies its own, so sock.c's reference resolves here and the
+ * test can see which task a recv-after-fin was answered. */
+static int wrap_dst, wrap_sid, wrap_calls;
+void sock_eof_reply(int dst, int sid) {
+    wrap_dst = dst; wrap_sid = sid; wrap_calls++;
+}
+
 int main(void) {
     /* TCP/UDP SEND length is clamped to what one message can carry */
     CHECK(net_clamp_send_len(-1) == 0, "negative send length clamps to 0");
@@ -42,6 +51,25 @@ int main(void) {
     u16 sum = cksum(ip, 20);
     ip[10] = (u8)(sum >> 8); ip[11] = (u8)sum;
     CHECK(ip_in(ip, 20) == 0, "empty ip payload rejected");
+
+    /* a recv that finds the peer already gone (fin seen, buffer empty)
+     * must answer the caller who just asked -- not a stale seat from a
+     * previous request that never cleared its pending src. The wrapped
+     * sock_eof_reply shows exactly who the reply went to. */
+    struct sock *sf = sock_alloc();
+    sf->fin_seen = 1;
+    sf->pending.src = 42;              /* a stale src: must not hear it */
+    struct msg m;
+    memset(&m, 0, sizeof m);
+    m.type = MSG_NET_RECV;
+    m.arg0 = 0;                        /* sock_alloc returns socks[0] fresh */
+    m.arg1 = 100;
+    m.src = 7;                         /* the current caller */
+    wrap_dst = -999; wrap_sid = -999; wrap_calls = 0;
+    sock_api(&m);
+    CHECK(wrap_calls == 1, "recv-after-fin answers once");
+    CHECK(wrap_dst == 7, "recv-after-fin answers the current caller");
+    CHECK(wrap_sid == 0, "recv-after-fin names the socket");
 
     if (fails) { printf("unit-net: %d failure(s)\n", fails); return 1; }
     printf("unit-net: all ok\n");
