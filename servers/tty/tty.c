@@ -64,7 +64,10 @@ static void handle(struct msg *m) {
     if (m->type == MSG_TTY_CHAR)
         handle_char(m->data[0]);
     else if (m->type == MSG_TTY_PUTS)
-        sys_write(m->data, m->arg0);
+        /* arg0 is the payload length, from an untrusted sender. The
+         * clamp (tty_puts_len) keeps a bogus length from reaching
+         * sys_write, which would print the tty's own stack. */
+        sys_write(m->data, tty_puts_len(m->arg0));
     else if (m->type == MSG_TTY_CLEAR)
         sys_clear();
     else if (m->type == MSG_TTY_GETLINE) {

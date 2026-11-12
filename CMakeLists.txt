@@ -206,6 +206,14 @@ if(POMELO_CAN_LINK_M32)
     target_link_options(unit-mmio-guard PRIVATE -m32)
     target_include_directories(unit-mmio-guard PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-mmio-guard COMMAND unit-mmio-guard)
+
+    # unit-tty-puts: the MSG_TTY_PUTS length clamp is a header inline,
+    # so no production TU -- it checks the rule the service runs.
+    add_executable(unit-tty-puts tests/unit/test_tty_puts.c)
+    target_compile_options(unit-tty-puts PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-tty-puts PRIVATE -m32)
+    target_include_directories(unit-tty-puts PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-tty-puts COMMAND unit-tty-puts)
 else()
     message(STATUS "32-bit host libc (gcc-multilib) not found; "
         "skipping unit-fs/unit-net")
