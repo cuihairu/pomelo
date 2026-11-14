@@ -76,6 +76,9 @@ servers/net/nic.c   the e1000 driver and the console helpers
 servers/net/arp.c   address resolution: the gateway's cache entry, answers to who-has-us
 servers/net/ip.c    the datagram envelope: checksum, ip send and receive, icmp
 servers/net/sock.c  the socket table, the minimal TCP, and the message replies
+servers/net/proto.h the private seams between these .c files: ip in to socket send, send back to ip out
+servers/net/sock.h  the socket table shape the other modules share
+servers/net/sock_reply.c the one unsolicited reply: the peer is gone, tell the reader
 servers/net/net.h   the message protocol, e1000 registers, Ethernet and ip constants
 apps/netsh/netsh.c   the event loop: two echoes + one outbound greeting
 kernel/string.c/.h  memmove: compacting the socket receive buffer

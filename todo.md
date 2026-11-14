@@ -32,6 +32,7 @@
 - [x] cmd_write 写盘失败护栏 — dd2cac9, ctest 7/7
 - [x] TCP 重传 snd_nxt 固定 una+len — dd8105e, ctest 7/7
 - [x] 全仓代码深审报告 — docs/review/2026-11-01-code-review.md, 2026-11-02
+- [x] fleet-docs-audit-G2 再审计（2026-11-14）— 桶② 5 + 桶③ 5 + 桶① 0，见 docs/审计-文档一致性.md「增量轮次（2026-11-14）」；语言切换面：本仓已有首页 navigator.language 自动识别（docs/index.md 与 zh 镜像），无需立 todo；docs build 绿、docs-chapters 38 页零回归
 
 ## 审核发现
 

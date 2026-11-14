@@ -15,8 +15,8 @@ This table contains the architecture-level vocabulary that recurs across the sou
 | 收件箱 | Inbox | Per-task finite message ring that can enqueue, block the receiver, and wake it atomically. | `kernel/ipc/ipc.h:19-22`, `kernel/ipc/ipc.c:13-27` |
 | 等待发送 | Send-wait | A client-side retry loop that yields while the destination inbox is full, preventing a silently lost request or stranded reply. | `kernel/syscall/syscall.h:62-68` |
 | 系统调用门 | Syscall gate | The sole DPL 3 interrupt gate (`0x80`) through which ring 3 can enter kernel service dispatch. | `kernel/intr/idt.c:61-63`, `kernel/syscall/syscall.h:39-44` |
-| 用户指针校验 | User pointer validation | Syscall boundary check that requires an address range to lie in the user region and every page to be mapped in the caller's page directory. | `kernel/syscall/syscall.c:21-35` |
-| 中断所有权 | IRQ ownership | The distinction between kernel-installed handlers acknowledged immediately and ring 3 claimants that wait, service hardware, then acknowledge the PIC themselves. | `kernel/intr/irq.c:4-10`, `kernel/intr/intr.c:83-93` |
+| 用户指针校验 | User pointer validation | Syscall boundary check that requires an address range to lie in the user region and every page to be mapped in the caller's page directory. | `kernel/syscall/syscall.c:26-35` |
+| 中断所有权 | IRQ ownership | The distinction between kernel-installed handlers acknowledged immediately and ring 3 claimants that wait, service hardware, then acknowledge the PIC themselves. | `kernel/intr/irq.c:4-10`, `kernel/intr/intr.c:76-83` |
 | 中断等待 | IRQ wait | Per-task bit-set blocking primitive that wakes when any claimed interrupt line in the mask fires. | `kernel/intr/irq.c:78-94` |
 | 恒等映射 | Identity mapping | The 16 MiB supervisor-only low-memory map shared by all directories, allowing kernel code and page tables to run under any active CR3. | `kernel/mm/paging.h:12-16`, `kernel/mm/paging.c:6-22` |
 | 物理帧 | Physical frame | One 4 KiB physical page tracked by a kernel bitmap below the 16 MiB ceiling; the only backing store for directories, user pages, and device tables. | `kernel/mm/frame.h:6-17`, `kernel/mm/frame.c:4-17` |
@@ -33,7 +33,7 @@ This table contains the architecture-level vocabulary that recurs across the sou
 | 轮询 PIO | Polled PIO | The ATA driver's programmed-I/O read/write path with yielding status waits; it deliberately avoids interrupts and DMA. | `servers/fs/ata.c:5-14`, `servers/fs/ata.c:30-35` |
 | Socket 协议 | Socket protocol | The ten net message kinds that map `open`, `accept`, `recv`, `send`, and `close` operations onto a fixed message transport. | `servers/net/net.h:15-32` |
 | Socket 上下文 | Socket context | One of four service-owned records carrying protocol, address pair, TCP state, unacked segment, receive buffer, and parked caller. | `servers/net/sock.c:17-36` |
-| 事件泵 | Event pump | The net service's interrupt/message wait loop that drains inbox requests, clears device causes, dispatches frames or timer ticks, then EOIs the owned line. | `servers/net/nic.c:144-148`, `servers/net/net.c:83-95` |
+| 事件泵 | Event pump | The net service's interrupt/message wait loop that drains inbox requests, clears device causes, dispatches frames or timer ticks, then EOIs the owned line. | `servers/net/nic.c:144-148`, `servers/net/net.c:81-93` |
 | 用户态驱动 | User-space driver | ATA/e1000 hardware code that runs in its owning ring 3 task with explicit IOPL, port, MMIO, and owned-IRQ access rather than inside the kernel. | `servers/net/net.h:6-11`, `boot/main.c:21-34` |
 | 隔离探针 | Isolation probe | A deliberately faulting task that proves a ring 3 touch on kernel memory kills only itself while kernel and other services continue. | `apps/probe/probe.c:6-11` |
 | 嵌入式用户镜像 | Embedded user image | A flat ring 3 program linked at `0x40000000`, converted to a binary, and embedded as kernel data; its first four bytes are the entry point. | `tools/user.ld:1-20`, `boot/main.c:11-19` |

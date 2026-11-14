@@ -25,12 +25,26 @@ enum {
     SYS_MEM     = 10,  /* ebx=&mem_info: the frame bitmap, counted once */
     SYS_IRQ_ENABLE = 11, /* ebx=irq: unmask the PIC line, take this one over */
     SYS_V2P     = 12,  /* ebx=va: virtual to physical, for the DMA descriptor */
-    SYS_MMIO    = 13,  /* ebx=pa: map a page of device registers, returns a virtual address */
+    SYS_MMIO    = 13,  /* ebx=pa: map a page of device registers, returns a virtual address
+                        * (pa below the 16 MiB span is refused: that is RAM, not a device) */
     SYS_IRQ_EOI = 14,  /* ebx=irq: re-acknowledge the line you took over */
 };
 ```
 
-On the kernel side it simply dispatches by number. Arguments travel in registers (eax = number, ebx/ecx = arguments), and the return value is written back to eax:
+On the kernel side it dispatches by number — but every pointer that crosses the door is checked first. Arguments travel in registers (eax = number, ebx/ecx = arguments), and the return value is written back to eax. The check is one helper, `user_ok`: the range must sit in the user region and every page it touches must be mapped in the caller's own directory, or a bad pointer would fault the *kernel* instead of the task that passed it (`kernel/syscall/syscall.c:26-35`):
+
+```c
+static int user_ok(const void *p, u32 len) {
+    u32 a = (u32)p, b = a + len;
+    if (b < a) return 0;                       /* wrapped around */
+    if (a < USER_BASE || b > USER_STACK_TOP) return 0;
+    while (a < b) {
+        if (!v2p(a)) return 0;                 /* a hole: page not mapped */
+        a = (a & ~0xFFFu) + 4096;
+    }
+    return 1;
+}
+```
 
 ```c
 void syscall_entry(struct regs *r) {
@@ -40,9 +54,11 @@ void syscall_entry(struct regs *r) {
         r->eax = 0;
         return;
     case SYS_SEND:
+        if (!user_ok((void *)r->ecx, sizeof(struct msg))) { r->eax = -1; return; }
         r->eax = ipc_send(r->ebx, (struct msg *)r->ecx);
         return;
     case SYS_RECV:
+        if (!user_ok((void *)r->ebx, sizeof(struct msg))) { r->eax = -1; return; }
         r->eax = ipc_recv((struct msg *)r->ebx, r->ecx);
         return;
     case SYS_IRQ_WAIT:
@@ -53,6 +69,9 @@ void syscall_entry(struct regs *r) {
         reboot_now();                 /* a tap on port 0x64, reboot */
         return;
     case SYS_WRITE:
+        /* ecx is unsigned here; a huge length fails the user_ok range
+         * check on the wrap instead of overflowing the console loop. */
+        if (!user_ok((const void *)r->ebx, r->ecx)) { r->eax = -1; return; }
         con_write((const char *)r->ebx, r->ecx);   /* the console is the kernel's to run */
         r->eax = 0;
         return;
@@ -61,36 +80,55 @@ void syscall_entry(struct regs *r) {
         r->eax = 0;
         return;
     case SYS_SPAWN:
+        /* sched_spawn reads at most PROG_NAME bytes of the name. */
+        if (!user_ok((const void *)r->ebx, PROG_NAME)) { r->eax = -1; return; }
         r->eax = sched_spawn((const char *)r->ebx);
         return;
-    case SYS_PS:
+    case SYS_PS: {
+        /* ps_snapshot writes at most NTASK-1 rows, whatever max says. */
+        u32 want = (u32)r->ecx;
+        if (want > NTASK) want = NTASK;
+        if (!user_ok((void *)r->ebx, want * sizeof(struct ps_entry))) {
+            r->eax = -1;
+            return;
+        }
         r->eax = ps_snapshot((struct ps_entry *)r->ebx, r->ecx);
         return;
+    }
     case SYS_UPTIME:
         r->eax = sched_uptime();
         return;
     case SYS_MEM:
+        if (!user_ok((void *)r->ebx, sizeof(struct mem_info))) {
+            r->eax = -1;
+            return;
+        }
         frame_stats((struct mem_info *)r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_ENABLE:
-        /* The PIC mask and the IDT are both kernel territory; a driver that
-         * takes a line opens its hole here. The hook that is installed is
-         * empty: the one who wakes up is irq.c, and the device's own interrupt
-         * state is cleared by the driver. Taking the line over moves this
-         * line's EOI from the kernel to the driver (sys_irq_eoi): under level
-         * triggering the device has to be made to shut up before the 8259 can
-         * be re-acknowledged. */
+        /* The pic mask and the idt are kernel territory; the driver that
+         * owns the line asks here. The stub is empty by design: waking
+         * the waiter is irq.c's job, and the driver clears the device's
+         * own interrupt state once it runs. Claiming the line is what
+         * moves its eoi from the kernel to the driver (sys_irq_eoi).
+         * irq_no_ok first: irq.c indexes its tables by the line number,
+         * and a bogus one would shift past the mask (1u << 16+) and poke
+         * pic ports that belong to nobody. */
+        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
         irq_claim(r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_EOI:
-        /* The other half of taking over: the driver has made the device shut
-         * up, and only now can the PIC re-acknowledge. The kernel deliberately
-         * skips the EOI when it delivers, precisely to leave the ordering to
-         * the driver here. */
+        /* The other half of owning a line: the driver quieted its device,
+         * now the pic may re-arm it. The kernel skipped the eoi on
+         * delivery exactly so this could happen in the right order.
+         * The range check matters as much as it does above: pic_eoi would
+         * happily ack a line 16+ (or a slave ack for 8-15 that never fired)
+         * and strand in-service bits. */
+        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
         pic_eoi(r->ebx);
         r->eax = 0;
         return;
@@ -98,7 +136,7 @@ void syscall_entry(struct regs *r) {
         r->eax = v2p(r->ebx);
         return;
     case SYS_MMIO:
-        r->eax = mmio_map(r->ebx);
+        r->eax = mmio_map(r->ebx);      /* refuses pa below the 16 MiB span */
         return;
     }
     r->eax = -1;                      /* no such number */

@@ -126,6 +126,9 @@ servers/net/nic.c   e1000 驱动与控制台辅助
 servers/net/arp.c   地址解析:网关缓存项、回应 who-has-us
 servers/net/ip.c    数据报封装:校验和、ip 收发、icmp
 servers/net/sock.c  socket 表、极简 TCP 与消息应答
+servers/net/proto.h 这些 .c 文件之间的私缝:ip 入到 socket 收、socket 发到 ip 出
+servers/net/sock.h  别的模块共用的 socket 表形状
+servers/net/sock_reply.c 唯一一封未经请求的回复:对端没了,告诉读者
 servers/net/net.h   消息协议、e1000 寄存器、以太网与 ip 常量
 apps/netsh/netsh.c  事件循环:双回显 + 出站问候
 kernel/string.c/.h  memmove:socket 接收缓冲的压实

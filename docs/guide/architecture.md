@@ -36,7 +36,7 @@ This layer is the platform console — console hardware policy (`kernel/char.c`,
 
 The fs service owns ATA PIO and the three-region disk format, loads the superblock and inode table at start, answers shell file requests, and degrades to an explicit refusal on a missing disk or bad magic. The tty service owns the line discipline and unclaimed completed lines. The net service owns PCI/e1000/MMIO/DMA, ARP, IP, ICMP, UDP, a minimal TCP, and a four-entry socket table. All three run in ring 3 and communicate only through `SYS_SEND`/`SYS_RECV`. Service protocol schemas are headers (`servers/fs/fs.h`, `servers/tty/tty.h`, `servers/net/net.h`); the disk schema is `servers/fs/format.h`. Runtime network parameters are compile-time SLIRP conventions rather than a configuration file.
 
-**Files:** `servers/fs/format.h`, `servers/fs/fs.h`, `servers/fs/fs.c`, `servers/fs/fsrw.c`, `servers/fs/ata.c`; `servers/tty/tty.h`, `servers/tty/tty.c`; `servers/net/net.h`, `servers/net/net.c`, `servers/net/nic.c`, `servers/net/arp.c`, `servers/net/ip.c`, `servers/net/sock.c`.
+**Files:** `servers/fs/format.h`, `servers/fs/fs.h`, `servers/fs/fs.c`, `servers/fs/fsrw.c`, `servers/fs/ata.c`; `servers/tty/tty.h`, `servers/tty/tty.c`; `servers/net/net.h`, `servers/net/proto.h`, `servers/net/sock.h`, `servers/net/net.c`, `servers/net/nic.c`, `servers/net/arp.c`, `servers/net/ip.c`, `servers/net/sock.c`, `servers/net/sock_reply.c`.
 
 ## Applications
 
@@ -54,7 +54,7 @@ The top-level build links six freestanding flat ring 3 images, converts each int
 
 Smoke and walkthrough scripts boot QEMU and drive serial, PS/2, mouse, network, clear, and reboot paths, then assert logs or VGA snapshots. CI reruns the same tests, adds unit tests for the host-linkable service paths, and publishes documentation. Runtime configuration is invocation-shaped: QEMU is required, `run` selects the SLIRP network and e1000 device, and smoke scripts forward host TCP/UDP ports; there is no config parser or schema file.
 
-**Files:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `CMakeLists.txt`, `.github/workflows/*.yml`.
+**Files:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `tests/unit/test_irq_guard.c`, `tests/unit/test_mmio_guard.c`, `tests/unit/test_tty_puts.c`, `tests/unit/test_spawn_cap.c`, `tests/unit/test_pdir_free.c`, `tests/unit/test_irq_release.c`, `CMakeLists.txt`, `.github/workflows/*.yml`.
 
 ## Split rationale
 

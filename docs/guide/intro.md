@@ -17,7 +17,7 @@ The pomelo kernel does only five things:
 | Paging (MMU) | |
 | Console and mouse hardware (kernel/char.c, kernel/mouse.c) | |
 
-Five mechanisms, plus the input hardware absorbed into the kernel — keyboard, serial and mouse interrupts can only be caught by the kernel (the reason is in [Chapter 14](/guide/ring3)). That is the only exception in this table. The whole outfit is 33 files and 2034 lines (`kernel/` 28 files, 1835 lines, plus the 5 files and 199 lines in `boot/`). Read that pile of `kernel/` and you have read all there is to the kernel; if you want to check, the end of this chapter tells you how to get the machine running.
+Five mechanisms, plus the input hardware absorbed into the kernel — keyboard, serial and mouse interrupts can only be caught by the kernel (the reason is in [Chapter 14](/guide/ring3)). That is the only exception in this table. The whole outfit is 33 files and 2194 lines (`kernel/` 28 files, 1995 lines, plus the 5 files and 199 lines in `boot/`). Read that pile of `kernel/` and you have read all there is to the kernel; if you want to check, the end of this chapter tells you how to get the machine running.
 
 ## Where the monolithic kernel is fast, and where the microkernel is steady
 

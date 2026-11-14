@@ -29,12 +29,26 @@ enum {
     SYS_MEM     = 10,  /* ebx=&mem_info: 帧位图,数一遍 */
     SYS_IRQ_ENABLE = 11, /* ebx=irq: 放行 PIC 脚,认领这条线 */
     SYS_V2P     = 12,  /* ebx=va: 虚拟到物理,给 DMA 描述符用 */
-    SYS_MMIO    = 13,  /* ebx=pa: 映一页设备寄存器,返回虚拟地址 */
+    SYS_MMIO    = 13,  /* ebx=pa: 映一页设备寄存器,返回虚拟地址
+                        * (16 MiB span 以下的 pa 被拒:那是 RAM,不是设备) */
     SYS_IRQ_EOI = 14,  /* ebx=irq: 重排这条自己认领的线 */
 };
 ```
 
-内核侧就是按号分派。参数走寄存器(eax=号,ebx/ecx=参),返回值写回 eax:
+内核侧按号分派——但**每一个跨过门口的指针都先过校验**。参数走寄存器(eax=号,ebx/ecx=参),返回值写回 eax。校验只有一个助手 `user_ok`:范围必须落在用户区,且它踩到的每一页都必须在**调用者自己**的页目录里映射着;否则一个坏指针崩的是**内核**,而不是递上它的那个任务(`kernel/syscall/syscall.c:26-35`):
+
+```c
+static int user_ok(const void *p, u32 len) {
+    u32 a = (u32)p, b = a + len;
+    if (b < a) return 0;                       /* 回绕 */
+    if (a < USER_BASE || b > USER_STACK_TOP) return 0;
+    while (a < b) {
+        if (!v2p(a)) return 0;                 /* 洞:这一页没映射 */
+        a = (a & ~0xFFFu) + 4096;
+    }
+    return 1;
+}
+```
 
 ```c
 void syscall_entry(struct regs *r) {
@@ -44,9 +58,11 @@ void syscall_entry(struct regs *r) {
         r->eax = 0;
         return;
     case SYS_SEND:
+        if (!user_ok((void *)r->ecx, sizeof(struct msg))) { r->eax = -1; return; }
         r->eax = ipc_send(r->ebx, (struct msg *)r->ecx);
         return;
     case SYS_RECV:
+        if (!user_ok((void *)r->ebx, sizeof(struct msg))) { r->eax = -1; return; }
         r->eax = ipc_recv((struct msg *)r->ebx, r->ecx);
         return;
     case SYS_IRQ_WAIT:
@@ -57,6 +73,9 @@ void syscall_entry(struct regs *r) {
         reboot_now();                 /* 往 0x64 口打一拍,重启 */
         return;
     case SYS_WRITE:
+        /* 这里的 ecx 是无符号;巨长会在 user_ok 的范围检查上撞回绕而败,
+         * 而不是把控制台循环撑爆。 */
+        if (!user_ok((const void *)r->ebx, r->ecx)) { r->eax = -1; return; }
         con_write((const char *)r->ebx, r->ecx);   /* 控制台归内核管 */
         r->eax = 0;
         return;
@@ -65,15 +84,29 @@ void syscall_entry(struct regs *r) {
         r->eax = 0;
         return;
     case SYS_SPAWN:
+        /* sched_spawn 至多读 PROG_NAME 个字节的程序名。 */
+        if (!user_ok((const void *)r->ebx, PROG_NAME)) { r->eax = -1; return; }
         r->eax = sched_spawn((const char *)r->ebx);
         return;
-    case SYS_PS:
+    case SYS_PS: {
+        /* ps_snapshot 至多写 NTASK-1 行,不管 max 说什么。 */
+        u32 want = (u32)r->ecx;
+        if (want > NTASK) want = NTASK;
+        if (!user_ok((void *)r->ebx, want * sizeof(struct ps_entry))) {
+            r->eax = -1;
+            return;
+        }
         r->eax = ps_snapshot((struct ps_entry *)r->ebx, r->ecx);
         return;
+    }
     case SYS_UPTIME:
         r->eax = sched_uptime();
         return;
     case SYS_MEM:
+        if (!user_ok((void *)r->ebx, sizeof(struct mem_info))) {
+            r->eax = -1;
+            return;
+        }
         frame_stats((struct mem_info *)r->ebx);
         r->eax = 0;
         return;
@@ -81,7 +114,10 @@ void syscall_entry(struct regs *r) {
         /* PIC 掩码和 IDT 都是内核地盘,握着线的驱动来这里开口子。
          * 挂上的桩是空的:唤醒人是 irq.c,设备自己的中断状态由驱动
          * 清。认领这个动作把这条线的 EOI 从内核挪给驱动(sys_irq_eoi),
-         * 电平触发下得先让设备闭嘴再重排 8259。 */
+         * 电平触发下得先让设备闭嘴再重排 8259。irq_no_ok 要先来:
+         * irq.c 按线号索引自己的表,一个越界的号会把掩码(1u << 16+)
+         * 甩出边界,戳到不属于任何人的 PIC 端口。 */
+        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
         irq_claim(r->ebx);
@@ -89,7 +125,11 @@ void syscall_entry(struct regs *r) {
         return;
     case SYS_IRQ_EOI:
         /* 认领的另一半:驱动让设备闭了嘴,现在 PIC 才可以重排。内核
-         * 投递时故意跳过 EOI,就是为了把顺序留给这里的驱动。 */
+         * 投递时故意跳过 EOI,就是为了把顺序留给这里的驱动。少了
+         * 同样的范围检查,pic_eoi 会痛快地给一条 16 号以上的线
+         * 发 EOI——或者给一次从未触发过的 8-15 从芯片发——把
+         * in-service 位钉死在那儿。 */
+        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
         pic_eoi(r->ebx);
         r->eax = 0;
         return;
@@ -97,11 +137,12 @@ void syscall_entry(struct regs *r) {
         r->eax = v2p(r->ebx);
         return;
     case SYS_MMIO:
-        r->eax = mmio_map(r->ebx);
+        r->eax = mmio_map(r->ebx);      /* 拒绝 16 MiB span 以下的 pa */
         return;
     }
     r->eax = -1;                      /* 没这个号 */
 }
+```
 ```
 
 ## 用户态的调用约定

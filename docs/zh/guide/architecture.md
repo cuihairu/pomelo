@@ -36,7 +36,7 @@
 
 fs 服务持有 ATA PIO 和三区磁盘格式,启动时载入超级块与 inode 表,应答 shell 文件请求,并在缺盘或坏 magic 时降级为明确拒绝。tty 服务持有行规程和未认领的完成行。net 服务持有 PCI/e1000/MMIO/DMA、ARP、IP、ICMP、UDP、极简 TCP 和四项 socket 表。三者都运行在 ring 3,只通过 `SYS_SEND`/`SYS_RECV` 通信。服务协议 schema 是头文件(`servers/fs/fs.h`, `servers/tty/tty.h`, `servers/net/net.h`);磁盘 schema 是 `servers/fs/format.h`。运行期网络参数是编译期 SLIRP 约定,而非配置文件。
 
-**文件:** `servers/fs/format.h`, `servers/fs/fs.h`, `servers/fs/fs.c`, `servers/fs/fsrw.c`, `servers/fs/ata.c`;`servers/tty/tty.h`, `servers/tty/tty.c`;`servers/net/net.h`, `servers/net/net.c`, `servers/net/nic.c`, `servers/net/arp.c`, `servers/net/ip.c`, `servers/net/sock.c`。
+**文件:** `servers/fs/format.h`, `servers/fs/fs.h`, `servers/fs/fs.c`, `servers/fs/fsrw.c`, `servers/fs/ata.c`;`servers/tty/tty.h`, `servers/tty/tty.c`;`servers/net/net.h`, `servers/net/proto.h`, `servers/net/sock.h`, `servers/net/net.c`, `servers/net/nic.c`, `servers/net/arp.c`, `servers/net/ip.c`, `servers/net/sock.c`, `servers/net/sock_reply.c`。
 
 ## 应用
 
@@ -54,7 +54,7 @@ shell 是 REPL 与客户端层:它有命令表,并为 tty 和 fs 协议提供薄
 
 smoke 与 walkthrough 脚本启动 QEMU,驱动串口、PS/2、鼠标、网络、清屏和重启路径,然后断言日志或 VGA 快照。CI 重跑同一批测试,增加对可宿主链接服务路径的单元测试,并发布文档。运行期配置是调用形状:QEMU 必需,`run` 选择 SLIRP 网络与 e1000 设备,smoke 脚本转发宿主 TCP/UDP 端口;没有配置解析器或 schema 文件。
 
-**文件:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `CMakeLists.txt`, `.github/workflows/*.yml`。
+**文件:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `tests/unit/test_irq_guard.c`, `tests/unit/test_mmio_guard.c`, `tests/unit/test_tty_puts.c`, `tests/unit/test_spawn_cap.c`, `tests/unit/test_pdir_free.c`, `tests/unit/test_irq_release.c`, `CMakeLists.txt`, `.github/workflows/*.yml`。
 
 ## 拆分理由
 
