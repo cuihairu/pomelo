@@ -145,18 +145,27 @@ void syscall_entry(struct regs *r) {
 
 ## The calling convention on the user side
 
-A service task cannot call `ipc_send` directly; instead it goes through a small wrapper that stuffs the arguments into registers and triggers `int 0x80`:
+A service task cannot call `ipc_send` directly; instead it goes through one shared `gate` helper that stuffs the arguments into registers and triggers `int 0x80`, and every syscall number gets a one-line wrapper over it:
 
 ```c
-static inline int sys_send(int dst, struct msg *m) {
-    int ret;
+/* User-side: enter the kernel through the int 0x80 gate only. */
+static inline i32 gate(int n, int a, int b) {
+    i32 ret;
     __asm__ volatile("int $0x80"
-        : "=a"(ret)
-        : "a"(SYS_SEND), "b"(dst), "c"(m)
-        : "memory");
+        : "=a"(ret) : "a"(n), "b"(a), "c"(b) : "memory");
     return ret;
 }
+static inline int  sys_send(int dst, struct msg *m) { return gate(SYS_SEND, dst, (int)m); }
+static inline int  sys_recv(struct msg *m)          { return gate(SYS_RECV, (int)m, 1); }
+...
+static inline u32  sys_mmio(u32 pa)                 { return gate(SYS_MMIO, (int)pa, 0); }
+...
+static inline void sys_send_wait(int dst, struct msg *m) {
+    while (sys_send(dst, m) < 0) sys_yield();      /* a full queue is retried, not dropped */
+}
 ```
+
+(The `...` cuts are the other thirteen numbers — each one the same one-liner — followed by `sys_send_wait`, the retry loop every request/reply caller uses.)
 
 `int 0x80` makes the CPU jump to entry 128 of the IDT — we wire it to `intr_stub_128` inside `idt_init`. The stub pads in a fake error code, pushes the vector number, and jumps into `intr_common`, which saves the `regs` scene and hands off to `intr_dispatch`; only when it recognizes 0x80 does it pass on to `syscall_entry`. This path shares the same stub machinery as the [interrupts chapter](/guide/interrupts); only the entry point is different.
 

@@ -147,18 +147,27 @@ void syscall_entry(struct regs *r) {
 
 ## 用户态的调用约定
 
-服务任务不能直接调 `ipc_send`,而是通过一个小包装,把参数塞进寄存器、触发 `int 0x80`:
+服务任务不能直接调 `ipc_send`,而是走同一个 `gate` 助手把参数塞进寄存器、触发 `int 0x80`,每个调用号在它那上面套一行包装:
 
 ```c
-static inline int sys_send(int dst, struct msg *m) {
-    int ret;
+/* 用户态:只走 int 0x80 这一扇门进内核。 */
+static inline i32 gate(int n, int a, int b) {
+    i32 ret;
     __asm__ volatile("int $0x80"
-        : "=a"(ret)
-        : "a"(SYS_SEND), "b"(dst), "c"(m)
-        : "memory");
+        : "=a"(ret) : "a"(n), "b"(a), "c"(b) : "memory");
     return ret;
 }
+static inline int  sys_send(int dst, struct msg *m) { return gate(SYS_SEND, dst, (int)m); }
+static inline int  sys_recv(struct msg *m)          { return gate(SYS_RECV, (int)m, 1); }
+...
+static inline u32  sys_mmio(u32 pa)                 { return gate(SYS_MMIO, (int)pa, 0); }
+...
+static inline void sys_send_wait(int dst, struct msg *m) {
+    while (sys_send(dst, m) < 0) sys_yield();      /* 队列满了就重试,而不是丢 */
+}
 ```
+
+(`...` 截掉的是另外十三个号——每一个都是同样的一行;后面跟 `sys_send_wait`,是所有请求/应答调用方共用的重试循环。)
 
 `int 0x80` 让 CPU 转到 IDT 第 128 项——我们在 `idt_init` 里把它接到
 `intr_stub_128`。桩补一个假的错误码、压上向量号,跳进 `intr_common` 保存
