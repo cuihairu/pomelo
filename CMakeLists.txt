@@ -252,6 +252,18 @@ if(POMELO_CAN_LINK_M32)
     target_link_options(unit-dma PRIVATE -m32)
     target_include_directories(unit-dma PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-dma COMMAND unit-dma)
+
+    # unit-frame-nest: the allocator's critical sections are a production
+    # function (frame.c), so the test links that TU and, because cli and
+    # sti are ring 0, compiles the kernel's inline pair away with
+    # POMELO_INTR_TEST and supplies a recording stand-in instead.
+    add_executable(unit-frame-nest tests/unit/test_frame_nest.c
+        kernel/mm/frame.c)
+    target_compile_definitions(unit-frame-nest PRIVATE POMELO_INTR_TEST)
+    target_compile_options(unit-frame-nest PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-frame-nest PRIVATE -m32)
+    target_include_directories(unit-frame-nest PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-frame-nest COMMAND unit-frame-nest)
 else()
     message(STATUS "32-bit host libc (gcc-multilib) not found; "
         "skipping unit-fs/unit-net")

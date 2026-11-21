@@ -18,6 +18,11 @@ static void task_fault(struct regs *r, const char *what, u32 addr) {
         panic(what, r);
     intr_disable();
     kprintf("task %d killed: %s at %x (eip=%x)\n", cur, what, addr, r->eip);
+    /* Stand on the kernel's own directory before taking the task's away:
+     * cr3 still points at the frames about to go back to the bitmap, and
+     * this must hold through the whole teardown, which runs with
+     * interrupts off and therefore cannot be preempted either. */
+    load_cr3((u32)kernel_pdir);
     task_free_frames(cur);         /* its pages die with it: no leaks */
     irq_release(cur);              /* its hardware lines go back too */
     tasks[cur].state = ST_FREE;

@@ -26,16 +26,20 @@ void frame_init(void) {
 }
 
 u32 frame_alloc(void) {
-    intr_disable();   /* a tick here could hand one frame to two spawners */
+    /* Save and restore rather than disable and enable: a tick could hand
+     * one frame to two spawners, and frame_alloc is also called from the
+     * middle of a teardown that must stay unpreemptible (intr_save keeps
+     * whatever state it found). */
+    u32 flags = intr_save();
     for (u32 f = first_free; f < NFRAMES; f++) {
         if (!is_used(f)) {
             mark(f);
             if (f == first_free) first_free++;
-            intr_enable();
+            intr_restore(flags);
             return f * 4096;
         }
     }
-    intr_enable();
+    intr_restore(flags);
     return 0;
 }
 
@@ -45,22 +49,22 @@ void frame_free(u32 pa) {
      * hand the very page to the next frame_alloc while the card repaints
      * it. dma_release gives them back once the line is re-claimed. */
     if (dma_pinned(pa)) return;
-    intr_disable();
+    u32 flags = intr_save();
     unmark(pa / 4096);
     if (pa / 4096 < first_free) first_free = pa / 4096;
-    intr_enable();
+    intr_restore(flags);
 }
 
 /* Count the bitmap for SYS_MEM. Interrupts off so total/used/free agree
  * with each other -- a tick in the middle could hand out a frame between
  * two counts and make the numbers not add up. */
 void frame_stats(struct mem_info *out) {
-    intr_disable();
+    u32 flags = intr_save();
     u32 used = 0;
     for (u32 f = 0; f < NFRAMES; f++)
         if (is_used(f)) used++;
     out->total = NFRAMES;
     out->used = used;
     out->free = NFRAMES - used;
-    intr_enable();
+    intr_restore(flags);
 }
