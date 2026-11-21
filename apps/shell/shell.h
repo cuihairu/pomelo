@@ -29,12 +29,29 @@ void cmd_mem(int argc, char **argv);
 /* cmd_spawn prints "<name> is task <n> now". The fixed suffix (space,
  * "is task ", one digit, " now\n", the NUL) needs SPAWN_SUFFIX bytes, so a
  * name from a tty line -- which may be long -- can use at most the rest of
- * the line buffer. Bound the copy by this; the spawn itself only ever reads
- * the first PROG_NAME bytes, but the shell holds the whole string. */
+ * the line buffer. The kernel reads only the first PROG_NAME bytes of a
+ * name, but the shell holds the whole string, so the copy is what must be
+ * bounded. spawn_line is a pure function of its four inputs, which is what
+ * lets a unit test reach the real formatting path without a tty, a task
+ * table or a spawn. */
 #define SPAWN_SUFFIX 16
 static inline int spawn_name_cap(int buf) {
     if (buf <= SPAWN_SUFFIX) return 0;   /* no room for name and suffix */
     return buf - SPAWN_SUFFIX;
+}
+
+/* Lay "<name> is task <n> now\n" into line[cap] and return its length, NUL
+ * included. The name stops at spawn_name_cap(cap) bytes, so the suffix
+ * SPAWN_SUFFIX set aside for it always lands inside the buffer. */
+static inline int spawn_line(char *line, int cap, const char *name, int tid) {
+    int p = 0;
+    for (int i = 0; name[i] && p < spawn_name_cap(cap); i++)
+        line[p++] = name[i];
+    for (const char *s = " is task "; *s; s++) line[p++] = *s;
+    line[p++] = '0' + tid;
+    for (const char *s = " now\n"; *s; s++) line[p++] = *s;
+    line[p] = 0;
+    return p;
 }
 
 /* shell.c: tty client helpers */

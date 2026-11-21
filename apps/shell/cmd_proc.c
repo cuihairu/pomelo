@@ -50,17 +50,10 @@ void cmd_spawn(int argc, char **argv) {
         tty_puts("spawn failed (unknown name or no seat)\n");
         return;
     }
+    /* The name came from a tty line, so it may be longer than the 48 bytes
+     * the shell holds here: spawn_line clamps it to spawn_name_cap and
+     * leaves SPAWN_SUFFIX bytes for the suffix and the NUL. */
     char line[48];
-    int p = 0;
-    /* The name came from a tty line, so it may be long (the kernel
-     * only reads its first PROG_NAME bytes, but the shell holds it
-     * whole); leave SPAWN_SUFFIX bytes for the suffix and NUL below, so
-     * a long name must never write past line. */
-    for (int i = 0; argv[1][i] && p < spawn_name_cap((int)sizeof(line)); i++)
-        line[p++] = argv[1][i];
-    for (const char *s = " is task "; *s; s++) line[p++] = *s;
-    line[p++] = '0' + tid;
-    for (const char *s = " now\n"; *s; s++) line[p++] = *s;
-    line[p] = 0;
+    int p = spawn_line(line, (int)sizeof(line), argv[1], tid);
     tty_write(line, p);
 }
