@@ -1,4 +1,5 @@
 #include "frame.h"
+#include "dma.h"
 #include "../intr/intr.h"
 
 /* The frame allocator is one bitmap, as the roadmap promised. Everything
@@ -39,6 +40,11 @@ u32 frame_alloc(void) {
 }
 
 void frame_free(u32 pa) {
+    /* A dying task's DMA frames are returned by pdir_free too, and the
+     * card behind them is still writing into them -- releasing one would
+     * hand the very page to the next frame_alloc while the card repaints
+     * it. dma_release gives them back once the line is re-claimed. */
+    if (dma_pinned(pa)) return;
     intr_disable();
     unmark(pa / 4096);
     if (pa / 4096 < first_free) first_free = pa / 4096;

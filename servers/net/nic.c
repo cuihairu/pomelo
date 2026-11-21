@@ -200,6 +200,17 @@ void nic_bringup(void) {
         if (!(rd(E1000_CTRL) & CTRL_RST))
             break;
 
+    /* Claim the line first, and the reset makes that safe: the global
+     * reset clears the card's interrupt mask, so the line sits open but
+     * idle until the enables below. It must precede the v2p calls,
+     * because the kernel stamps each machine address a driver converts
+     * as a frame the card may still write into -- and only a task that
+     * claims a line has a card to worry about. */
+    if (sys_irq_enable(irq) < 0) {
+        say("net: irq line refused\n");
+        return;
+    }
+
     /* Machine addresses for everything the card will read or write. */
     rx_ring_pa = sys_v2p((u32)rx_ring);
     tx_ring_pa = sys_v2p((u32)tx_ring);
@@ -237,7 +248,6 @@ void nic_bringup(void) {
     wr(E1000_RCTL, RCTL_EN | RCTL_BAM);
     wr(E1000_TCTL, TCTL_EN | TCTL_PSP);
     wr(E1000_IMS, IMS_RXT0 | IMS_TXDW);
-    sys_irq_enable(irq);
     /* The card may carry interrupt causes from before we got here (link
      * status settles on its own while the line is still masked). Reading
      * ICR once drops them, so the first thing pump sees is a fresh

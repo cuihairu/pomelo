@@ -58,7 +58,7 @@ set(KSRC
     kernel/char.c kernel/kprintf.c kernel/mouse.c kernel/string.c kernel/vga.c
     kernel/intr/idt.c kernel/intr/intr.c kernel/intr/irq.c
     kernel/intr/stubs.S
-    kernel/mm/frame.c kernel/mm/paging.c
+    kernel/mm/dma.c kernel/mm/frame.c kernel/mm/paging.c
     kernel/sched/sched.c kernel/sched/switch.S kernel/sched/prog.c
     kernel/ipc/ipc.c
     kernel/syscall/syscall.c
@@ -243,6 +243,15 @@ if(POMELO_CAN_LINK_M32)
     target_link_options(unit-irq-release PRIVATE -m32)
     target_include_directories(unit-irq-release PRIVATE ${CMAKE_SOURCE_DIR})
     add_test(NAME unit-irq-release COMMAND unit-irq-release)
+
+    # unit-dma: the DMA stamp table is a production function (dma.c), so
+    # the test links that TU and supplies its own frame_free to count the
+    # frames the release hands back.
+    add_executable(unit-dma tests/unit/test_dma.c kernel/mm/dma.c)
+    target_compile_options(unit-dma PRIVATE -m32 -O0 -g -Wall -Wextra)
+    target_link_options(unit-dma PRIVATE -m32)
+    target_include_directories(unit-dma PRIVATE ${CMAKE_SOURCE_DIR})
+    add_test(NAME unit-dma COMMAND unit-dma)
 else()
     message(STATUS "32-bit host libc (gcc-multilib) not found; "
         "skipping unit-fs/unit-net")

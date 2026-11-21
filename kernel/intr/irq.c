@@ -44,10 +44,40 @@ int irq_owned(u32 irq) {
 
 /* The claim act: a ring 3 driver opens its line through sys_irq_enable,
  * and from then on it -- not the kernel -- owns the line's eoi. The seat
- * is remembered so a crash can give the line back (irq_release). */
-void irq_claim(u32 irq) {
+ * is remembered so a crash can give the line back (irq_release).
+ *
+ * A claim is exclusive, and two doors are shut. A kernel line (the
+ * clock, the keyboard, the serial port, the mouse, the cascade) is
+ * never handed out -- the kernel services it in interrupt context and
+ * has no way to reach sys_irq_eoi, so a claimed kernel line would
+ * strand its in-service bit and go silent after one event. And a line
+ * another seat already holds is not taken over either: two drivers on
+ * one line would mean two eois per event, or one -- and the loser's
+ * death (irq_release re-masks the line) would cut the winner off its
+ * own hardware. Re-claiming a line this seat already owns is a no-op,
+ * so a driver that re-runs its bringup stays put. */
+int irq_claim(u32 irq) {
+    if (irq_kernel(irq)) return -1;
+    if (((claimed >> irq) & 1u) && claimed_by[irq] != cur) return -1;
     claimed |= 1u << irq;
     claimed_by[irq] = cur;
+    return 0;
+}
+
+/* The finer question sys_irq_eoi asks: not just "is this line claimed",
+ * but "is it claimed by the caller". An eoi from anyone else would
+ * re-arm a line its owner may still be quieting. */
+int irq_owned_by(u32 irq, int seat) {
+    return ((claimed >> irq) & 1u) && claimed_by[irq] == seat;
+}
+
+/* Which line this seat owns, or -1 when it owns none. SYS_V2P asks so
+ * it can stamp the frames a driver hands to a card: a machine address
+ * given out to a task that holds no line is not a DMA target. */
+int irq_line_of(int seat) {
+    for (u32 irq = 0; irq < NIRQ; irq++)
+        if (claimed_by[irq] == seat) return (int)irq;
+    return -1;
 }
 
 /* A driver that dies takes its hardware with it -- or would: the stub it

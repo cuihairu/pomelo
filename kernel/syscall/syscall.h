@@ -54,8 +54,8 @@ static inline int  sys_spawn(const char *name)      { return gate(SYS_SPAWN, (in
 static inline int  sys_ps(struct ps_entry *b, int n){ return gate(SYS_PS, (int)b, n); }
 static inline u32  sys_uptime(void)                 { return gate(SYS_UPTIME, 0, 0); }
 static inline void sys_mem(struct mem_info *m)      { (void)gate(SYS_MEM, (int)m, 0); }
-static inline void sys_irq_enable(int irq)          { (void)gate(SYS_IRQ_ENABLE, irq, 0); }
-static inline void sys_irq_eoi(int irq)             { (void)gate(SYS_IRQ_EOI, irq, 0); }
+static inline int  sys_irq_enable(int irq)          { return gate(SYS_IRQ_ENABLE, irq, 0); }
+static inline int  sys_irq_eoi(int irq)             { return gate(SYS_IRQ_EOI, irq, 0); }
 static inline u32  sys_v2p(u32 va)                  { return gate(SYS_V2P, (int)va, 0); }
 static inline u32  sys_mmio(u32 pa)                 { return gate(SYS_MMIO, (int)pa, 0); }
 

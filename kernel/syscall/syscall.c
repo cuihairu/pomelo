@@ -1,6 +1,7 @@
 #include "syscall.h"
 #include "../char.h"
 #include "../intr/intr.h"
+#include "../mm/dma.h"
 #include "../mm/paging.h"
 #include "../sched/sched.h"
 
@@ -101,27 +102,56 @@ void syscall_entry(struct regs *r) {
          * moves its eoi from the kernel to the driver (sys_irq_eoi).
          * irq_no_ok first: irq.c indexes its tables by the line number,
          * and a bogus one would shift past the mask (1u << 16+) and poke
-         * pic ports that belong to nobody. */
-        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
+         * pic ports that belong to nobody. irq_kernel next: the clock,
+         * keyboard, serial, mouse and cascade are the kernel's own, and
+         * a claimed kernel line would strand its eoi. irq_claim last of
+         * all is the exclusive act -- a line another live driver holds
+         * is refused, and the claim runs before the pic line opens so a
+         * refusal never unmasks hardware nobody owns. */
+        if (!irq_no_ok(r->ebx) || irq_kernel(r->ebx) ||
+            irq_claim(r->ebx) < 0) {
+            r->eax = -1;
+            return;
+        }
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
-        irq_claim(r->ebx);
+        /* The driver that wins this line has just reset the card, which
+         * is also what stops the dead driver's DMA -- so the frames the
+         * previous claimant stamped through sys_v2p are quiet now and
+         * can go back to the pool. */
+        dma_release(r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_EOI:
         /* The other half of owning a line: the driver quieted its device,
          * now the pic may re-arm it. The kernel skipped the eoi on
-         * delivery exactly so this could happen in the right order.
-         * The range check matters as much as it does above: pic_eoi would
-         * happily ack a line 16+ (or a slave ack for 8-15 that never fired)
-         * and strand in-service bits. */
-        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
+         * delivery exactly so this could happen in the right order -- by
+         * the owner, and nobody else: an eoi from a stranger would
+         * re-arm a line its driver may still be quieting. irq_no_ok
+         * matters as much as it does above: pic_eoi would happily ack a
+         * line 16+ (or a slave ack for 8-15 that never fired) and strand
+         * in-service bits. */
+        if (!irq_no_ok(r->ebx) || !irq_owned_by(r->ebx, cur)) {
+            r->eax = -1;
+            return;
+        }
         pic_eoi(r->ebx);
         r->eax = 0;
         return;
-    case SYS_V2P:
-        r->eax = v2p(r->ebx);
+    case SYS_V2P: {
+        u32 pa = v2p(r->ebx);
+        r->eax = pa;
+        /* A task that claims a line is telling the kernel which card it
+         * drives, so every machine address it converts afterwards is a
+         * frame the card may still write into after the task dies. Pin
+         * it (dma.h) -- a device page above the span is the card's own
+         * register window, not a frame at all. */
+        if (pa && pa < SPAN) {
+            int line = irq_line_of(cur);
+            if (line >= 0) dma_pin(line, pa);
+        }
         return;
+    }
     case SYS_MMIO:
         r->eax = mmio_map(r->ebx);
         return;
