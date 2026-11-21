@@ -31,7 +31,7 @@ enum {
 };
 ```
 
-On the kernel side it dispatches by number — but every pointer that crosses the door is checked first. Arguments travel in registers (eax = number, ebx/ecx = arguments), and the return value is written back to eax. The check is one helper, `user_ok`: the range must sit in the user region and every page it touches must be mapped in the caller's own directory, or a bad pointer would fault the *kernel* instead of the task that passed it (`kernel/syscall/syscall.c:26-35`):
+On the kernel side it dispatches by number — but every pointer that crosses the door is checked first. Arguments travel in registers (eax = number, ebx/ecx = arguments), and the return value is written back to eax. The check is one helper, `user_ok`: the range must sit in the user region and every page it touches must be mapped in the caller's own directory, or a bad pointer would fault the *kernel* instead of the task that passed it (`kernel/syscall/syscall.c:27-36`):
 
 ```c
 static int user_ok(const void *p, u32 len) {
@@ -114,27 +114,56 @@ void syscall_entry(struct regs *r) {
          * moves its eoi from the kernel to the driver (sys_irq_eoi).
          * irq_no_ok first: irq.c indexes its tables by the line number,
          * and a bogus one would shift past the mask (1u << 16+) and poke
-         * pic ports that belong to nobody. */
-        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
+         * pic ports that belong to nobody. irq_kernel next: the clock,
+         * keyboard, serial, mouse and cascade are the kernel's own, and
+         * a claimed kernel line would strand its eoi. irq_claim last of
+         * all is the exclusive act -- a line another live driver holds
+         * is refused, and the claim runs before the pic line opens so a
+         * refusal never unmasks hardware nobody owns. */
+        if (!irq_no_ok(r->ebx) || irq_kernel(r->ebx) ||
+            irq_claim(r->ebx) < 0) {
+            r->eax = -1;
+            return;
+        }
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
-        irq_claim(r->ebx);
+        /* The driver that wins this line has just reset the card, which
+         * is also what stops the dead driver's DMA -- so the frames the
+         * previous claimant stamped through sys_v2p are quiet now and
+         * can go back to the pool. */
+        dma_release(r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_EOI:
         /* The other half of owning a line: the driver quieted its device,
          * now the pic may re-arm it. The kernel skipped the eoi on
-         * delivery exactly so this could happen in the right order.
-         * The range check matters as much as it does above: pic_eoi would
-         * happily ack a line 16+ (or a slave ack for 8-15 that never fired)
-         * and strand in-service bits. */
-        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
+         * delivery exactly so this could happen in the right order -- by
+         * the owner, and nobody else: an eoi from a stranger would
+         * re-arm a line its driver may still be quieting. irq_no_ok
+         * matters as much as it does above: pic_eoi would happily ack a
+         * line 16+ (or a slave ack for 8-15 that never fired) and strand
+         * in-service bits. */
+        if (!irq_no_ok(r->ebx) || !irq_owned_by(r->ebx, cur)) {
+            r->eax = -1;
+            return;
+        }
         pic_eoi(r->ebx);
         r->eax = 0;
         return;
-    case SYS_V2P:
-        r->eax = v2p(r->ebx);
+    case SYS_V2P: {
+        u32 pa = v2p(r->ebx);
+        r->eax = pa;
+        /* A task that claims a line is telling the kernel which card it
+         * drives, so every machine address it converts afterwards is a
+         * frame the card may still write into after the task dies. Pin
+         * it (dma.h) -- a device page above the span is the card's own
+         * register window, not a frame at all. */
+        if (pa && pa < SPAN) {
+            int line = irq_line_of(cur);
+            if (line >= 0) dma_pin(line, pa);
+        }
         return;
+    }
     case SYS_MMIO:
         r->eax = mmio_map(r->ebx);      /* refuses pa below the 16 MiB span */
         return;
@@ -171,7 +200,7 @@ static inline void sys_send_wait(int dst, struct msg *m) {
 
 ## One door, not a pile of functions
 
-Worth emphasizing: between a Pomelo task and the kernel there are **only these fifteen calls**. Reading a file, a keystroke — none of it goes through the syscall, but is a message between services (via `SYS_SEND`/`SYS_RECV`); `SYS_WRITE`/`SYS_CLEAR` are the only exceptions — the screen is the kernel's to run, and a task that wants to say anything has only this one exit (the reason is in [Chapter 14](/guide/ring3)). The latest four (11–14) were added when the NIC driver moved into ring 3: unmask an interrupt line, acknowledge receipt, the physical address for the DMA descriptor, mapping the device registers — for the privileges a driver asks for, the kernel never hands one over for free, one gate at a time. The smaller the syscall table, the smaller the kernel; the smaller the kernel, the closer it comes to what a microkernel is supposed to be.
+Worth emphasizing: between a Pomelo task and the kernel there are **only these fifteen calls**. Reading a file, a keystroke — none of it goes through the syscall, but is a message between services (via `SYS_SEND`/`SYS_RECV`); `SYS_WRITE`/`SYS_CLEAR` are the only exceptions — the screen is the kernel's to run, and a task that wants to say anything has only this one exit (the reason is in [Chapter 14](/guide/ring3)). The latest four (11–14) were added when the NIC driver moved into ring 3: unmask an interrupt line, acknowledge receipt, the physical address for the DMA descriptor, mapping the device registers — for the privileges a driver asks for, the kernel never hands one over for free, one gate at a time. Two of the four now answer with an int (`sys_irq_enable` and `sys_irq_eoi` changed from void to int), so a service sees the refusal instead of guessing at success. And `SYS_V2P` stopped being a pure translator the day drivers started holding lines: a machine address the kernel hands to a task that owns a card is a frame the card may still be writing into after that task dies, so real frames get stamped (`dma_pin`, deduplicated by frame base) and `frame_free` refuses to release a stamped one — the next `frame_alloc` cannot hand the very page the card is still repainting to a new task. The stamps come back only when the line is claimed again: net dies and its frames stay used; the next bringup resets the card (which is what stops the old DMA), claims the line, and `SYS_IRQ_ENABLE` releases the dead driver's frames on the success path — a stamp must be dropped before its `frame_free`, or the guard would swallow its own free and hold the frame forever. If nobody ever claims the line again, roughly ten frames stay pinned for good, a deliberate trade: the kernel would rather leak a handful of frames than let a card overwrite a live task's memory. The smaller the syscall table, the smaller the kernel; the smaller the kernel, the closer it comes to what a microkernel is supposed to be.
 
 ## Files of this chapter
 

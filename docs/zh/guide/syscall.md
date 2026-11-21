@@ -35,7 +35,7 @@ enum {
 };
 ```
 
-内核侧按号分派——但**每一个跨过门口的指针都先过校验**。参数走寄存器(eax=号,ebx/ecx=参),返回值写回 eax。校验只有一个助手 `user_ok`:范围必须落在用户区,且它踩到的每一页都必须在**调用者自己**的页目录里映射着;否则一个坏指针崩的是**内核**,而不是递上它的那个任务(`kernel/syscall/syscall.c:26-35`):
+内核侧按号分派——但**每一个跨过门口的指针都先过校验**。参数走寄存器(eax=号,ebx/ecx=参),返回值写回 eax。校验只有一个助手 `user_ok`:范围必须落在用户区,且它踩到的每一页都必须在**调用者自己**的页目录里映射着;否则一个坏指针崩的是**内核**,而不是递上它的那个任务(`kernel/syscall/syscall.c:27-36`):
 
 ```c
 static int user_ok(const void *p, u32 len) {
@@ -114,35 +114,61 @@ void syscall_entry(struct regs *r) {
         /* PIC 掩码和 IDT 都是内核地盘,握着线的驱动来这里开口子。
          * 挂上的桩是空的:唤醒人是 irq.c,设备自己的中断状态由驱动
          * 清。认领这个动作把这条线的 EOI 从内核挪给驱动(sys_irq_eoi),
-         * 电平触发下得先让设备闭嘴再重排 8259。irq_no_ok 要先来:
-         * irq.c 按线号索引自己的表,一个越界的号会把掩码(1u << 16+)
-         * 甩出边界,戳到不属于任何人的 PIC 端口。 */
-        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
+         * 电平触发下得先让设备闭嘴再重排 8259。三道门挤在一个条件里,
+         * 硬件直到三道全过才被碰,一次拒绝留下的 PIC 和来时一模一样:
+         * irq_no_ok 要先来(irq.c 按线号索引自己的表,一个越界的号
+         * 会把掩码(1u << 16+)甩出边界,戳到不属于任何人的 PIC 端口),
+         * 然后 irq_kernel(时钟、键盘、串口、鼠标和级联是内核自留的,
+         * 认领内核线会把它的 EOI 钉死),最后才是 irq_claim——排他的
+         * 动作:别的活驱动握着的线会被拒。认领赶在 pic_irq_enable 之前,
+         * 也是同一个道理。 */
+        if (!irq_no_ok(r->ebx) || irq_kernel(r->ebx) ||
+            irq_claim(r->ebx) < 0) {
+            r->eax = -1;
+            return;
+        }
         pic_irq_enable(r->ebx);
         irq_install(r->ebx, net_irq_stub);
-        irq_claim(r->ebx);
+        /* 赢下这条线也意味着卡刚被重置——而重置正是掐断死驱动 DMA
+         * 的那一手。前任经 sys_v2p 盖过章的帧如今都安静了,在这里归还
+         * 给帧池(dma_release),赶在本驱动给自己盖章之前。 */
+        dma_release(r->ebx);
         r->eax = 0;
         return;
     case SYS_IRQ_EOI:
         /* 认领的另一半:驱动让设备闭了嘴,现在 PIC 才可以重排。内核
-         * 投递时故意跳过 EOI,就是为了把顺序留给这里的驱动。少了
-         * 同样的范围检查,pic_eoi 会痛快地给一条 16 号以上的线
-         * 发 EOI——或者给一次从未触发过的 8-15 从芯片发——把
-         * in-service 位钉死在那儿。 */
-        if (!irq_no_ok(r->ebx)) { r->eax = -1; return; }
+         * 投递时故意跳过 EOI,就是为了把顺序留给这里的驱动——由主人
+         * 发,而且只由主人发:陌生人的 EOI 会把一条人家还没闭嘴的线
+         * 重新武装,第二道门(irq_owned_by)防的就是这个。少了同样的
+         * 范围检查,pic_eoi 会痛快地给一条 16 号以上的线发 EOI——
+         * 或者给一次从未触发过的 8-15 从芯片发——把 in-service 位
+         * 钉死在那儿。 */
+        if (!irq_no_ok(r->ebx) || !irq_owned_by(r->ebx, cur)) {
+            r->eax = -1;
+            return;
+        }
         pic_eoi(r->ebx);
         r->eax = 0;
         return;
-    case SYS_V2P:
-        r->eax = v2p(r->ebx);
+    case SYS_V2P: {
+        u32 pa = v2p(r->ebx);
+        r->eax = pa;
+        /* 握着一条线,就是任务向内核申报自己在开哪张卡:此后它换来的
+         * 每个机器地址,都是任务死后卡可能还在写的帧。真帧在此盖章
+         * (dma_pin),好让它活得过驱动;16 MiB span 之上的页是卡自己的
+         * 寄存器窗口,根本不是帧。 */
+        if (pa && pa < SPAN) {
+            int line = irq_line_of(cur);
+            if (line >= 0) dma_pin(line, pa);
+        }
         return;
+    }
     case SYS_MMIO:
         r->eax = mmio_map(r->ebx);      /* 拒绝 16 MiB span 以下的 pa */
         return;
     }
     r->eax = -1;                      /* 没这个号 */
 }
-```
 ```
 
 ## 用户态的调用约定
@@ -181,7 +207,16 @@ static inline void sys_send_wait(int dst, struct msg *m) {
 `SYS_WRITE`/`SYS_CLEAR` 是仅有的例外——屏幕归内核管,任务想说话只有这一个
 出口(缘由见[第 14 章](/zh/guide/ring3))。最新的四个(11–14)是网卡驱动住进
 ring 3 时添的:开中断线、确认收讫、DMA 描述符的物理地址、设备寄存器的映射——
-驱动要的特权,内核一概不白给,一次一个门。系统调用表越小,内核越小;内核越小,
+驱动要的特权,内核一概不白给,一次一个门。四个里如今有两个改答 int
+(`sys_irq_enable` 和 `sys_irq_eoi` 从 void 改成了 int),服务看得见拒绝,
+不用把失败当成功来猜。`SYS_V2P` 也不再是单纯的翻译:内核交给握线任务的机器
+地址,是任务死后卡可能还在写的帧,所以真帧要盖章(`dma_pin`,按帧基址去重),
+`frame_free` 见了盖章的帧拒不放手——下一次 `frame_alloc` 就不会把卡还在涂的
+那一页发给新任务。章要等这条线被再次认领时才收回:net 死了,帧保持占用;下一轮
+bringup 重置卡(这一手恰好停掉旧 DMA)、认领线,`SYS_IRQ_ENABLE` 在成功路径上
+归还死驱动的帧——盖章必须先摘,否则守卫会把自己的 free 吞掉,帧被永远攥住。
+若这条线再没人认领,大约十帧就永远钉在那里,这是内核故意的取舍:宁可漏掉几帧,
+也不让一张卡覆写活任务的内存。系统调用表越小,内核越小;内核越小,
 越接近微内核的本来面目。
 
 ## 本章文件

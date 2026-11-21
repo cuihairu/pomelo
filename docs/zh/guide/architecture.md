@@ -24,7 +24,7 @@
 
 中断分发持有 IDT、PIC remap、PIT、异常和分发路径,该路径要么进入系统调用表,要么把 IRQ 交给所有者;分页持有 16 MiB 内核恒等映射、物理帧位图、用户页目录、MMIO 与虚拟/物理翻译;调度持有任务座位、ring 3 启动帧、程序注册表、抢占、阻塞和按名重启;IPC 持有每个任务的定长收件箱;系统调用门校验用户指针并暴露 15 个系统操作。状态保存在内核数组中:任务/收件箱记录、物理帧位图、程序注册表、IDT、中断所有权表和页表。共享 ABI 位于 `kernel/syscall/syscall.h`;没有运行期配置文件。
 
-**文件:** `kernel/intr/intr.h`, `kernel/intr/idt.c`, `kernel/intr/irq.c`, `kernel/intr/intr.c`, `kernel/intr/stubs.S`;`kernel/mm/paging.h`, `kernel/mm/paging.c`, `kernel/mm/frame.h`, `kernel/mm/frame.c`;`kernel/sched/sched.h`, `kernel/sched/sched.c`, `kernel/sched/prog.c`, `kernel/sched/switch.S`;`kernel/ipc/ipc.h`, `kernel/ipc/ipc.c`;`kernel/syscall/syscall.h`, `kernel/syscall/syscall.c`。
+**文件:** `kernel/intr/intr.h`, `kernel/intr/idt.c`, `kernel/intr/irq.c`, `kernel/intr/intr.c`, `kernel/intr/stubs.S`;`kernel/mm/paging.h`, `kernel/mm/paging.c`, `kernel/mm/frame.h`, `kernel/mm/frame.c`, `kernel/mm/dma.h`, `kernel/mm/dma.c`;`kernel/sched/sched.h`, `kernel/sched/sched.c`, `kernel/sched/prog.c`, `kernel/sched/switch.S`;`kernel/ipc/ipc.h`, `kernel/ipc/ipc.c`;`kernel/syscall/syscall.h`, `kernel/syscall/syscall.c`。
 
 ## 内核专属输入输出
 
@@ -54,7 +54,7 @@ shell 是 REPL 与客户端层:它有命令表,并为 tty 和 fs 协议提供薄
 
 smoke 与 walkthrough 脚本启动 QEMU,驱动串口、PS/2、鼠标、网络、清屏和重启路径,然后断言日志或 VGA 快照。CI 重跑同一批测试,增加对可宿主链接服务路径的单元测试,并发布文档。运行期配置是调用形状:QEMU 必需,`run` 选择 SLIRP 网络与 e1000 设备,smoke 脚本转发宿主 TCP/UDP 端口;没有配置解析器或 schema 文件。
 
-**文件:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `tests/unit/test_irq_guard.c`, `tests/unit/test_mmio_guard.c`, `tests/unit/test_tty_puts.c`, `tests/unit/test_spawn_cap.c`, `tests/unit/test_pdir_free.c`, `tests/unit/test_irq_release.c`, `CMakeLists.txt`, `.github/workflows/*.yml`。
+**文件:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `tests/unit/test_irq_guard.c`, `tests/unit/test_mmio_guard.c`, `tests/unit/test_tty_puts.c`, `tests/unit/test_spawn_cap.c`, `tests/unit/test_pdir_free.c`, `tests/unit/test_irq_release.c`, `tests/unit/test_dma.c`, `tests/unit/test_frame_nest.c`, `CMakeLists.txt`, `.github/workflows/*.yml`。
 
 ## 拆分理由
 

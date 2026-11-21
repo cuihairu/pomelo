@@ -24,7 +24,7 @@ This map separates the source by responsibility rather than by directory name. I
 
 Interrupt dispatch owns the IDT, PIC remapping, PIT, exceptions, and the dispatch path that either enters the syscall table or sends an IRQ to its owner; paging owns the 16 MiB kernel identity map, frame bitmap, user directories, MMIO, and VA-to-PA translation; scheduling owns task seats, ring 3 startup frames, the program registry, preemption, blocking, and restart by name; IPC owns every task's fixed-size inbox; the syscall gate validates user pointers and exposes the 15 system operations. State is in kernel arrays: task/inbox records, the frame bitmap, program registry, IDT, IRQ ownership table, and page tables. The shared ABI lives in `kernel/syscall/syscall.h`; there is no runtime configuration file.
 
-**Files:** `kernel/intr/intr.h`, `kernel/intr/idt.c`, `kernel/intr/irq.c`, `kernel/intr/intr.c`, `kernel/intr/stubs.S`; `kernel/mm/paging.h`, `kernel/mm/paging.c`, `kernel/mm/frame.h`, `kernel/mm/frame.c`; `kernel/sched/sched.h`, `kernel/sched/sched.c`, `kernel/sched/prog.c`, `kernel/sched/switch.S`; `kernel/ipc/ipc.h`, `kernel/ipc/ipc.c`; `kernel/syscall/syscall.h`, `kernel/syscall/syscall.c`.
+**Files:** `kernel/intr/intr.h`, `kernel/intr/idt.c`, `kernel/intr/irq.c`, `kernel/intr/intr.c`, `kernel/intr/stubs.S`; `kernel/mm/paging.h`, `kernel/mm/paging.c`, `kernel/mm/frame.h`, `kernel/mm/frame.c`, `kernel/mm/dma.h`, `kernel/mm/dma.c`; `kernel/sched/sched.h`, `kernel/sched/sched.c`, `kernel/sched/prog.c`, `kernel/sched/switch.S`; `kernel/ipc/ipc.h`, `kernel/ipc/ipc.c`; `kernel/syscall/syscall.h`, `kernel/syscall/syscall.c`.
 
 ## Kernel-owned input/output
 
@@ -54,7 +54,7 @@ The top-level build links six freestanding flat ring 3 images, converts each int
 
 Smoke and walkthrough scripts boot QEMU and drive serial, PS/2, mouse, network, clear, and reboot paths, then assert logs or VGA snapshots. CI reruns the same tests, adds unit tests for the host-linkable service paths, and publishes documentation. Runtime configuration is invocation-shaped: QEMU is required, `run` selects the SLIRP network and e1000 device, and smoke scripts forward host TCP/UDP ports; there is no config parser or schema file.
 
-**Files:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `tests/unit/test_irq_guard.c`, `tests/unit/test_mmio_guard.c`, `tests/unit/test_tty_puts.c`, `tests/unit/test_spawn_cap.c`, `tests/unit/test_pdir_free.c`, `tests/unit/test_irq_release.c`, `CMakeLists.txt`, `.github/workflows/*.yml`.
+**Files:** `tools/smoke.sh`, `tools/smoke-ps2.sh`, `tools/smoke-mouse.sh`, `tools/smoke-net.sh`, `tools/smoke-clear.sh`, `tools/smoke-reboot.sh`, `tools/walkthrough.sh`, `tools/nightly-run.sh`, `tests/unit/test_fs.c`, `tests/unit/test_net.c`, `tests/unit/test_mkfs.sh`, `tests/unit/test_irq_guard.c`, `tests/unit/test_mmio_guard.c`, `tests/unit/test_tty_puts.c`, `tests/unit/test_spawn_cap.c`, `tests/unit/test_pdir_free.c`, `tests/unit/test_irq_release.c`, `tests/unit/test_dma.c`, `tests/unit/test_frame_nest.c`, `CMakeLists.txt`, `.github/workflows/*.yml`.
 
 ## Split rationale
 
