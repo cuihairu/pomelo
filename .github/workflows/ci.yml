@@ -47,5 +47,4 @@ jobs:
           cmake --build build -j
 
       - name: boot in qemu
-        working-directory: build
-        run: ctest --output-on-failure
+        run: sh tools/ctest-gate.sh --test-dir build --output-on-failure

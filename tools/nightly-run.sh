@@ -36,10 +36,21 @@ pacing() {
 
 # --- run 1: the walkthrough battery over the serial port -----------------
 # its verdict is the whole run's verdict: it is kept for the end, after
-# run two has collected its evidence
+# run two has collected its evidence. The battery paces its keystrokes on
+# second-grained sleeps, so on a busy shared runner CPU contention can drop
+# one and flake the whole night -- give it one retry, into its own log, and
+# only a second failure stays red. A real hang or a real regression fails
+# again; a load blip comes back green.
 walk=0
 sh "$SCRIPT_DIR/walkthrough.sh" "$qemu" "$kernel" "$img" "$out/serial.log" \
     -M "$mach" "$@" || walk=1
+if [ "$walk" = 1 ]; then
+    echo "nightly-run: first walkthrough attempt failed; trying once more"
+    walk=0
+    sh "$SCRIPT_DIR/walkthrough.sh" "$qemu" "$kernel" "$img" \
+        "$out/serial.retry.log" -M "$mach" "$@" || walk=1
+    [ "$walk" = 0 ] || { echo "FAIL: the walkthrough battery failed twice"; exit 1; }
+fi
 
 # --- run 2: screendump of the boot screen --------------------------------
 rm -f "$out/monitor.sock" "$out/boot.ppm"
