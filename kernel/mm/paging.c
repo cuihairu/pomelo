@@ -93,6 +93,13 @@ u32 pdir_user_new(u32 blob_pa, u32 bytes) {
         return 0;
     }
 
+    /* A stack frame is not a copy of anything, so nothing overwrites its
+     * old bytes -- and after ccba8be a spawn can be handed the frame a
+     * dead task used for its stack. Clear it, the same way the page
+     * table is cleared below, or a new task could read what the previous
+     * one left on it. */
+    memset((void *)stf, 0, 4096);
+
     u32 *de = (u32 *)dir;                        /* pa == va below 16 MB */
     memset(de, 0, 4096);
     for (u32 i = 0; i < NPT; i++) de[i] = kernel_pdir[i];
@@ -102,8 +109,17 @@ u32 pdir_user_new(u32 blob_pa, u32 bytes) {
     u32 *te = (u32 *)pt;
     for (u32 f = 0; f < frames; f++) {
         u32 fr = frame_alloc();
-        if (!fr) return 0;      /* out of memory mid-image: leak the frames,
-                                   the machine is done for anyway */
+        if (!fr) {
+            /* Out of memory halfway through an image. The frames copied
+             * so far are already written into the directory, so pdir_free
+             * walks them back exactly -- and it takes the page table and
+             * the directory with them. The stack frame is not mapped yet,
+             * so hand it back by hand; failing to do that is how a spawn
+             * that dies of a shortage leaves every later spawn poorer. */
+            pdir_free(dir);
+            frame_free(stf);
+            return 0;
+        }
         memcpy((void *)fr, (void *)(blob_pa + f * 4096), 4096);
         te[f] = fr | PTE_P | PTE_RW | PTE_US;
     }

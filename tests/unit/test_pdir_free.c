@@ -24,7 +24,17 @@
 static u32 freed[64];
 static int nfreed;
 void frame_free(u32 pa) { if (nfreed < 64) freed[nfreed++] = pa; }
-u32  frame_alloc(void) { return 0; }       /* not reached on the free path */
+
+/* The other half: pdir_user_new asks frame_alloc for its frames, so the
+ * test scripts the answers out of the pool and can force a shortage by
+ * keeping the pool smaller than the image wants. */
+static u32 pool[64];
+static int npool;
+static int ncalls;
+u32 frame_alloc(void) {
+    if (ncalls >= npool) return 0;         /* the shortage the test wants */
+    return pool[ncalls++];
+}
 void frame_init(void) {}
 
 /* paging.c also reads the task table and the current seat. */
@@ -63,6 +73,8 @@ static void map(u32 at) {
 #define STK   0x202000
 #define IMG2  0x203000
 #define DEV   0xFE000000  /* a device mapping, above the span */
+#define POOL0 0x400000   /* frame_alloc's answers */
+#define BLOB  0x300000   /* the image pdir_user_new copies */
 
 int main(void) {
     map(DIR); map(UTBL); map(MTBL); map(KTBL);
@@ -100,6 +112,47 @@ int main(void) {
     CHECK(was_freed(IMG2),  "a RAM frame in the mmio table is returned");
     CHECK(!was_freed(KTBL), "the shared kernel table is not returned");
     CHECK(!was_freed(DEV),  "the device page is not returned");
+
+    /* A spawn that dies of a frame shortage mid-image must come out even:
+     * every frame the copy already took has to come back, dir and tables
+     * with them, and the stack frame the mapping has not reached yet too.
+     * frame_alloc is scripted so the shortage lands where the test wants
+     * it to -- the second image frame, after dir, table, stack and the
+     * first image frame are already held. */
+    nfreed = 0;
+    ncalls = 0;
+    npool = 0;
+    for (int i = 0; i < 16; i++) {
+        map(POOL0 + (u32)i * 4096);
+        pool[npool++] = POOL0 + (u32)i * 4096;
+    }
+    map(BLOB);
+    map(BLOB + 4096);
+    memset((void *)BLOB, 0x5A, 8192);
+
+    nfreed = 0; ncalls = 0; npool = 4;
+    CHECK(pdir_user_new(BLOB, 8192) == 0, "a mid-image shortage gives up");
+    CHECK(ncalls == 4, "it got four frames and then the shortage hit");
+    CHECK(nfreed == 4, "the abort returns the four frames it held");
+    CHECK(was_freed(pool[0]), "the directory itself comes back");
+    CHECK(was_freed(pool[1]), "the page table comes back");
+    CHECK(was_freed(pool[2]), "the stack frame comes back too");
+    CHECK(was_freed(pool[3]), "the image frame already copied comes back");
+
+    /* and a directory that does build gives the stack clean bytes, so a
+     * dead task cannot hand its replacement what it left on the frame */
+    nfreed = 0; ncalls = 0; npool = 16;
+    for (int i = 0; i < 16; i++)
+        memset((void *)pool[i], 0xEE, 4096);     /* old contents */
+    u32 dir = pdir_user_new(BLOB, 8192);
+    CHECK(dir != 0, "enough frames and a full image build the directory");
+    int dirty = 0;
+    for (int i = 0; i < 4096; i++)
+        if (((u8 *)pool[2])[i] != 0) dirty++;    /* pool[2] is the stack frame */
+    CHECK(dirty == 0, "the user stack frame is zeroed before it is mapped");
+    nfreed = 0;
+    pdir_free(dir);
+    CHECK(nfreed == 5, "and the directory still owns its five frames");
 
     if (fails) { printf("unit-pdir-free: %d failure(s)\n", fails); return 1; }
     printf("unit-pdir-free: all ok\n");
