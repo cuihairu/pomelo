@@ -19,7 +19,7 @@ qemu="$1"; kernel="$2"; img="$3"; out="$4"
 # screen-reading assertions below were all blank: pin std vga here.
 #
 # The keystrokes land only once the shell exists: the net service is
-# still bring-ing its card up while it boots, and a `reboot` typed before
+# still bringing its card up while it boots, and a `reboot` typed before
 # that is simply dropped -- the test then times out with no notice at
 # all, which reads like a broken reset line when it is only too eager.
 { sleep 8; printf '\n'

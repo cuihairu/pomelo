@@ -27,7 +27,10 @@ i=0
 while [ ! -S "$out/monitor.sock" ] && [ $i -lt 80 ]; do
     sleep 0.25; i=$((i + 1))
 done
-sleep 4                                  # boot, banner, shell prompt
+# 8s, not 4: the net service is still bringing its card up when the
+# shell starts, and keystrokes typed before it does die in the tty
+# queue -- a dead `mem` reads like a broken clear.
+sleep 8                                  # boot, banner, shell prompt
 
 mon() { printf '%s\n' "$1" | socat - "unix:$out/monitor.sock" > /dev/null; }
 keys() { for k in "$@"; do mon "sendkey $k"; sleep 0.3; done; }

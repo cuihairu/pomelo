@@ -27,7 +27,10 @@ i=0
 while [ ! -S "$out/monitor.sock" ] && [ $i -lt 80 ]; do
     sleep 0.25; i=$((i + 1))
 done
-sleep 4                                  # boot, banner, mouse init
+# 8s, not 4: the net service is still bringing its card up when the
+# shell starts, and keystrokes typed before it does die in the tty
+# queue -- a cursor that never moves reads like a dead mouse.
+sleep 8                                  # boot, banner, mouse init
 
 mon() { printf '%s\n' "$1" | socat - "unix:$out/monitor.sock" > /dev/null; }
 
