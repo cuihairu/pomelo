@@ -16,8 +16,10 @@ out=$(cd "$out" && pwd)
 rm -f "$out/monitor.sock" "$out/vga-before.bin" "$out/vga-after.bin"
 
 # own session: the group kill below takes out timeout AND qemu
+# qemu 10 stopped assembling a text screen under -display none, so the
+# screen-reading assertions below were all blank: pin std vga here.
 setsid timeout 60 "$qemu" -kernel "$kernel" -hda "$img" \
-    -display none -serial null -no-reboot \
+    -display none -vga std -serial null -no-reboot \
     -monitor unix:"$out/monitor.sock",server,nowait > "$out/qemu.log" 2>&1 &
 QPID=$!
 

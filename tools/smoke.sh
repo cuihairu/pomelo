@@ -21,8 +21,12 @@ trap '' PIPE                          # a dead qemu must not kill the driver
 : > "$out"
 rm -f "$fifo"
 mkfifo "$fifo"
+# qemu 10 stopped assembling a text screen under -display none, so pin
+# std vga everywhere the test battery boots: the screen-reading smoke
+# tests need it, and this one would boot a different machine than they
+# do otherwise.
 timeout 45 "$qemu" -kernel "$kernel" -hda "$img" \
-    -serial stdio -display none -no-reboot $netargs \
+    -serial stdio -display none -vga std -no-reboot $netargs \
     < "$fifo" > "$out" 2>&1 &
 qpid=$!
 # O_RDWR open never waits on a reader: a qemu that dies before opening the

@@ -18,8 +18,10 @@ rm -f "$out/monitor.sock" "$out/vga.bin" "$out/vga.txt" \
       "$out/vga.tmp.bin" "$out/vga.tmp.txt"
 
 # own session: the group kill below takes out timeout AND qemu
+# qemu 10 stopped assembling a text screen under -display none, so the
+# screen-reading assertions below were all blank: pin std vga here.
 setsid timeout 90 "$qemu" -kernel "$kernel" -hda "$img" \
-    -display none -serial null -no-reboot \
+    -display none -vga std -serial null -no-reboot \
     -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0 \
     -object filter-dump,id=f0,netdev=n0,file="$out/net.pcap" \
     -monitor unix:"$out/monitor.sock",server,nowait > "$out/qemu.log" 2>&1 &

@@ -43,8 +43,10 @@ sh "$SCRIPT_DIR/walkthrough.sh" "$qemu" "$kernel" "$img" "$out/serial.log" \
 
 # --- run 2: screendump of the boot screen --------------------------------
 rm -f "$out/monitor.sock" "$out/boot.ppm"
+# qemu 10 stopped assembling a text screen under -display none, so the
+# screen-reading assertions below were all blank: pin std vga here.
 { pacing; } | timeout 25 "$qemu" -M "$mach" -kernel "$kernel" -hda "$img" \
-    -display none -serial stdio -no-reboot "$@" \
+    -display none -vga std -serial stdio -no-reboot "$@" \
     -netdev user,id=n0,hostfwd=tcp::2323-:2323 -device e1000,netdev=n0 \
     -object filter-dump,id=f0,netdev=n0,file="$out/net.pcap" \
     -monitor unix:"$out/monitor.sock",server,nowait > /dev/null 2>&1 &

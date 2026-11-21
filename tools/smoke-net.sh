@@ -15,8 +15,12 @@ rm -f "$out/smoke.log" "$out/greeting.txt" "$out/tcp.txt" "$out/tcp2.txt" \
       "$out/udp.txt"
 
 # own session: the group kill below takes out timeout AND qemu
+# qemu 10 stopped assembling a text screen under -display none, so pin
+# std vga everywhere the test battery boots: the screen-reading smoke
+# tests need it, and this one would boot a different machine than they
+# do otherwise.
 setsid timeout 60 "$qemu" -kernel "$kernel" -hda "$img" \
-    -display none -no-reboot -serial file:"$out/smoke.log" \
+    -display none -vga std -no-reboot -serial file:"$out/smoke.log" \
     -netdev user,id=n0,hostfwd=tcp::2323-:2323,hostfwd=udp::2325-:2325 \
     -device e1000,netdev=n0 \
     -object filter-dump,id=f0,netdev=n0,file="$out/net.pcap" \

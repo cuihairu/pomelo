@@ -15,10 +15,17 @@
 
 qemu="$1"; kernel="$2"; img="$3"; out="$4"
 
-{ sleep 2; printf '\n'
+# qemu 10 stopped assembling a text screen under -display none, so the
+# screen-reading assertions below were all blank: pin std vga here.
+#
+# The keystrokes land only once the shell exists: the net service is
+# still bring-ing its card up while it boots, and a `reboot` typed before
+# that is simply dropped -- the test then times out with no notice at
+# all, which reads like a broken reset line when it is only too eager.
+{ sleep 8; printf '\n'
   sleep 1; printf 'reboot\n'
-  sleep 3; } | timeout 20 "$qemu" -kernel "$kernel" -hda "$img" \
-      -serial stdio -display none -no-reboot > "$out" 2>&1
+  sleep 8; } | timeout 25 "$qemu" -kernel "$kernel" -hda "$img" \
+      -serial stdio -display none -vga std -no-reboot > "$out" 2>&1
 status=$?
 
 fail=0
